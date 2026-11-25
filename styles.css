@@ -391,3 +391,16 @@ dialog::backdrop { background: rgba(20, 12, 4, .55); }
 .thanks .callout { text-align: left; margin: 12px 0; }
 .audio-box { display: grid; gap: 6px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2, var(--surface)); }
 .audio-box audio { width: 100%; }
+/* Door-to-door status grid */
+.door-grid { display: grid; gap: 4px; overflow-x: auto; }
+.door-floor { display: flex; gap: 4px; align-items: center; }
+.door-fl { width: 30px; flex: none; font-size: .75rem; color: var(--muted); text-align: right; padding-right: 4px; }
+.door { flex: 1 0 44px; max-width: 70px; text-align: center; font-size: .78rem; font-weight: 700; padding: 6px 0; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+.door.given { background: var(--good-soft); color: var(--good); border-color: var(--good); }
+.door.promised { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+.door.revisit, .door.locked { background: var(--surface); border: 2px solid var(--gold); color: var(--text); }
+.door.vacant, .door.na { color: var(--muted); text-decoration: line-through; opacity: .7; }
+.door.todo { border-style: dashed; color: var(--muted); }
+.door-dot { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--border); }
+.door-dot.given { background: var(--good); } .door-dot.promised { background: var(--warn); } .door-dot.revisit, .door-dot.locked { background: var(--gold); }
+.door-dot.vacant, .door-dot.na { background: var(--border); } .door-dot.todo { border-style: dashed; }

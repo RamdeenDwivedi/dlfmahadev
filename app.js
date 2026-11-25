@@ -659,7 +659,7 @@ function todaysDrive() {
 const LG = { data: null, loading: false, q: '', sec: 'receipts', st: '' };
 function loadLedger() {
   if (LG.data || LG.loading) return; LG.loading = true;
-  fetch('assets/ledger.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => { LG.data = d; if (tab === 'ledger') render(); })
+  fetch('assets/ledger.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => { LG.data = d; if (tab === 'ledger' || tab === 'volunteers') render(); })
     .catch(() => { LG.data = { error: true }; if (tab === 'ledger') render(); });
 }
 const ST_CLS = s => /^Paid$|Paid earlier/.test(s) ? 'good' : /Part|Pledged|Promised/.test(s) ? 'warn' : '';
@@ -710,6 +710,43 @@ function ledgerList() {
       <td data-label="Name"><b>${esc(x.name)}</b>${x.occ ? `<div class="small muted">${esc(x.occ)}</div>` : ''}</td><td data-label="Flat">${esc(x.flat || '—')}</td>
       <td class="r" data-label="Amount">${x.amount ? inr(x.amount) : '—'}${x.verify ? '<div class="small muted">to verify</div>' : ''}</td>
       <td data-label="Status"><span class="badge ${ST_CLS(x.status)}">${esc(x.status)}</span></td><td data-label="Mode">${esc(x.mode || '—')}</td></tr>`), sum(L.map(x => x.paid)));
+}
+
+/* ---------- Door-to-door status per flat (assets/visits.json + receipt book) ---------- */
+const VS = { data: null, loading: false, tower: 'L' };
+function loadVisits() {
+  if (VS.data || VS.loading) return; VS.loading = true;
+  fetch('assets/visits.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => { VS.data = d; if (tab === 'volunteers') render(); }).catch(() => {});
+}
+const DOOR = [
+  ['given', 'Contributed', 'good'], ['promised', 'Promised / pledged', 'warn'], ['revisit', 'Revisit', 'accent'], ['locked', 'Locked / evening', 'accent'],
+  ['vacant', 'Vacant', ''], ['na', 'Not applicable / not available', ''], ['todo', 'Not visited yet', 'todo'],
+];
+function doorMap(tw) {
+  const v = VS.data.towers[tw], L = LG.data || { receipts: [], before: [] }, m = {};
+  const set = (f, k, label) => { const rank = DOOR.findIndex(x => x[0] === k), cur = m[f]; if (!cur || rank < DOOR.findIndex(x => x[0] === cur.k)) m[f] = { k, label }; };
+  Object.entries(v.notes).forEach(([f, n]) => set(f, /vacant/i.test(n) ? 'vacant' : /not appl|not avail|do not/i.test(n) ? 'na' : /lock|evening/i.test(n) ? 'locked' : 'revisit', n));
+  L.receipts.filter(x => x.flat.startsWith(tw + '-')).forEach(x => {
+    const f = x.flat.slice(2);
+    if (/^Paid|Part/.test(x.status)) set(f, 'given', x.status + (x.amount ? ' · ' + inr(x.amount) : ''));
+    else if (/Pledged|Promised/.test(x.status)) set(f, 'promised', x.status);
+  });
+  L.before.forEach(x => String(x.flat).split(/[,&]/).forEach(p => { const mm = p.trim().match(/^([A-Z])\s*-?\s*0*(\d+)/); if (mm && mm[1] === tw) set(mm[2].padStart(3, '0'), 'given', 'Contributed before the drive · ' + inr(x.amount)); }));
+  (v.flats || Object.keys(m).sort()).forEach(f => { if (!m[f]) m[f] = { k: 'todo', label: 'Not visited yet' }; });
+  return m;
+}
+function doorStatus() {
+  loadVisits(); loadLedger();
+  if (!VS.data) return '';
+  const tw = VS.tower, m = doorMap(tw), flats = VS.data.towers[tw].flats || Object.keys(m).sort();
+  const c = k => flats.filter(f => m[f] && m[f].k === k).length;
+  const floors = {}; flats.forEach(f => (floors[f.slice(0, 2)] ||= []).push(f));
+  return `<section class="card"><div class="card-h"><h2>🚪 Door-to-door status</h2>
+    <div class="seg">${Object.keys(VS.data.towers).map(t => `<label><input type="radio" name="vstower" value="${t}" data-vstower ${t === tw ? 'checked' : ''}> Tower ${t}</label>`).join('')}</div></div>
+    <div class="legend" style="margin-bottom:10px">${DOOR.map(([k, l, cl]) => `<span><i class="door-dot ${k}"></i>${l} <b>${c(k)}</b></span>`).join('')}</div>
+    ${VS.data.towers[tw].flats ? '' : '<p class="hint" style="margin-bottom:8px">Only flats with a note or a receipt are shown for this tower; send the tower\'s flat list to show every door.</p>'}
+    <div class="door-grid">${Object.keys(floors).sort().reverse().map(fl => `<div class="door-floor"><span class="door-fl">${+fl}F</span>${floors[fl].map(f => `<span class="door ${m[f].k}" title="${tw}-${f}: ${esc(m[f].label)}">${f}</span>`).join('')}</div>`).join('')}</div>
+    <p class="small muted" style="margin:8px 0 0">Tap and hold (or hover) a flat for details. Based on the visit sheets of ${fmtD(VS.data.updated)} and the receipt book.</p></section>`;
 }
 
 /* ---------- Donate (residents) ---------- */
@@ -1067,6 +1104,7 @@ RENDER.volunteers = () => {
   const collectedBy = n => sum(S.donations.filter(d => (d.collectedBy || '').trim().toLowerCase() === n.trim().toLowerCase()).map(d => d.amount));
   return `
   <div class="toolbar"><button class="btn primary" data-act="addDrive">+ Plan a drive</button><button class="btn" data-act="addVolunteer">+ Add volunteer</button></div>
+  ${doorStatus()}
   <section class="kpis">
     ${kpi('Volunteers', S.volunteers.length, `${availToday.length + inToday.size} available today`)}
     ${kpi('Upcoming drives', upcoming.length, `${upcoming.filter(d => d.date === t).length} today`)}
@@ -1953,6 +1991,7 @@ document.addEventListener('change', async e => {
   const el = e.target;
   if (el.name === 'status' && el.closest('form[data-form=donation]')) { const p = $('[data-part]'); if (p) p.hidden = el.value !== 'Part'; }
   if (el.matches('[data-pick]')) { addPending(el.files); el.value = ''; }
+  if (el.matches('[data-vstower]')) { VS.tower = el.value; render(); }
   if (el.dataset.lg && el.dataset.lg !== 'q') { LG[el.dataset.lg] = el.value; if (el.dataset.lg === 'sec') LG.st = ''; render(); }
   if (el.matches('[data-join]') && el.value) {
     const d = S.drives.find(x => x.id === el.dataset.join); (d.volunteerIds ||= []).push(el.value); save(); render(); toast(`${volName(el.value)} joined the drive 🙋`);
