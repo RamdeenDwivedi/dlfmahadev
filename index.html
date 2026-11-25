@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mahadev Seva Drive</title>
+  <meta name="description" content="Society temple construction collection drive — dashboard, collections, pledges, volunteers, polls, weekly plan and visit script.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">🔱</span>
+        <div>
+          <div class="brand-title" id="brand-title"></div>
+          <div class="brand-sub" id="brand-sub"></div>
+        </div>
+      </div>
+      <div class="top-progress" id="top-progress"></div>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+  </header>
+
+  <main id="main" class="main"></main>
+
+  <datalist id="vol-list"></datalist>
+  <dialog id="modal"><div id="modal-body"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
