@@ -451,7 +451,7 @@ const empty = msg => `<div class="empty">${msg}</div>`;
    RENDERERS
    ========================================================================= */
 const TABS = [
-  ['dashboard', '📊 Dashboard'], ['film', '🎬 Temple Film'], ['collections', '🧾 Collections'], ['pledges', '🔔 Pledges & Reminders'],
+  ['dashboard', '📊 Dashboard'], ['film', '🎬 Temple Film'], ['collections', '🧾 Collections'], ['ledger', '📒 Ledger'], ['pledges', '🔔 Pledges & Reminders'],
   ['seva', '🪔 Seva & Sponsors'], ['volunteers', '🙋 Volunteers & Drives'], ['polls', '🗳️ Polls'], ['plan', '🗓️ Weekly Plan'],
   ['script', '🛕 Visit Script & Presentation'], ['settings', '⚙️ Settings'],
 ];
@@ -646,6 +646,63 @@ function todaysDrive() {
   setTimeout(check, 3000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
 })();
+
+/* ---------- Public ledger (assets/ledger.json, no phone numbers) ---------- */
+const LG = { data: null, loading: false, q: '', sec: 'receipts', st: '' };
+function loadLedger() {
+  if (LG.data || LG.loading) return; LG.loading = true;
+  fetch('assets/ledger.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(d => { LG.data = d; if (tab === 'ledger') render(); })
+    .catch(() => { LG.data = { error: true }; if (tab === 'ledger') render(); });
+}
+const ST_CLS = s => /^Paid$|Paid earlier/.test(s) ? 'good' : /Part|Pledged|Promised/.test(s) ? 'warn' : '';
+RENDER.ledger = () => {
+  loadLedger();
+  const d = LG.data;
+  if (!d) return `<section class="card">${empty('Loading the ledger…')}</section>`;
+  if (d.error) return `<section class="card">${empty('Could not load the ledger. Check your connection and refresh.')}</section>`;
+  const R = d.receipts, paid = sum(R.map(x => x.paid)), beforeT = sum(d.before.map(x => x.amount));
+  const cnt = st => R.filter(x => x.status === st).length;
+  const pend = R.filter(x => /Pledged|Promised|Part/.test(x.status));
+  const statuses = [...new Set(R.map(x => x.status))];
+  return `
+  <section class="card"><div class="card-h"><h2>📒 Temple collection ledger</h2><span class="muted small">Updated ${fmtD(d.updated)} · mobile numbers are never shown here</span></div>
+    <p class="hint">Every receipt, UPI payment and earlier donation, so every family can see where we stand. Receipts that say "already paid" are listed for reference only and not counted twice. If anything about your family is wrong, message ${esc(S.settings.auditName)} on WhatsApp.</p>
+    <section class="kpis" style="margin-top:12px">
+      ${kpi('Before the drive', inr(beforeT), `${d.before.length} families`)}
+      ${kpi('Receipt book: paid', inr(paid), `${cnt('Paid') + cnt('Part paid')} receipts`, 'good')}
+      ${kpi('Promised / pledged', pend.length, 'families to follow up after 30 Nov', 'warn')}
+      ${kpi('Paid earlier (reference)', cnt('Paid earlier (receipt for reference)'), 'already counted before')}
+      ${kpi('UPI screenshots', inr(sum(d.upi.map(x => x.amount))), `${d.upi.length} payments`)}
+    </section></section>
+  <section class="card">
+    <div class="filters" style="grid-template-columns:2fr 1fr 1fr">
+      <input type="search" placeholder="Search name or flat (e.g. L-121)" data-lg="q" value="${esc(LG.q)}" aria-label="Search ledger">
+      <select data-lg="sec" aria-label="Section">${[['receipts', 'Receipt book (drive)'], ['upi', 'UPI payments'], ['before', 'Before the drive']].map(([v, l]) => `<option value="${v}" ${LG.sec === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select data-lg="st" aria-label="Status" ${LG.sec === 'receipts' ? '' : 'disabled'}><option value="">All statuses</option>${statuses.map(x => `<option ${LG.st === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+    </div>
+    <div id="lg-list">${ledgerList()}</div>
+  </section>`;
+};
+function ledgerList() {
+  const d = LG.data, q = LG.q.trim().toLowerCase().replace(/\s+/g, '');
+  const hit = x => !q || (x.name + x.flat).toLowerCase().replace(/[\s-]+/g, '').includes(q.replace(/-/g, ''));
+  const tbl = (head, rows, total) => rows.length ? `<p class="small muted" style="margin:0 0 8px">${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}${total != null ? ` · <b>${inr(total)}</b>` : ''}</p>
+    <div class="table-wrap"><table class="rtable"><thead><tr>${head.map(h => `<th${h.r ? ' class="r"' : ''}>${h.t}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : empty('No entries match.');
+  if (LG.sec === 'before') {
+    const L = d.before.filter(hit);
+    return tbl([{ t: 'Donor' }, { t: 'Flat' }, { t: 'Amount', r: 1 }], L.map(x => `<tr><td data-label="Donor"><b>${esc(x.name)}</b></td><td data-label="Flat">${esc(x.flat)}</td><td class="r" data-label="Amount">${inr(x.amount)}${x.note ? ` <span class="badge">${esc(x.note)}</span>` : ''}</td></tr>`), sum(L.map(x => x.amount)));
+  }
+  if (LG.sec === 'upi') {
+    const L = d.upi.filter(hit);
+    return tbl([{ t: 'Date' }, { t: 'Paid by' }, { t: 'Flat' }, { t: 'Amount', r: 1 }], L.map(x => `<tr><td data-label="Date">${fmtD(x.date)} ${esc(x.time || '')}</td><td data-label="Paid by">${esc(x.name)}</td><td data-label="Flat">${esc(x.flat || '—')}</td><td class="r" data-label="Amount"><b>${inr(x.amount)}</b></td></tr>`), sum(L.map(x => x.amount)));
+  }
+  const L = d.receipts.filter(x => hit(x) && (!LG.st || x.status === LG.st));
+  return tbl([{ t: 'Receipt' }, { t: 'Date' }, { t: 'Name' }, { t: 'Flat' }, { t: 'Amount', r: 1 }, { t: 'Status' }, { t: 'Mode' }],
+    L.map(x => `<tr><td data-label="Receipt">${esc(x.no)}</td><td data-label="Date">${x.date ? fmtD(x.date) : '—'}</td>
+      <td data-label="Name"><b>${esc(x.name)}</b>${x.occ ? `<div class="small muted">${esc(x.occ)}</div>` : ''}</td><td data-label="Flat">${esc(x.flat || '—')}</td>
+      <td class="r" data-label="Amount">${x.amount ? inr(x.amount) : '—'}${x.verify ? '<div class="small muted">to verify</div>' : ''}</td>
+      <td data-label="Status"><span class="badge ${ST_CLS(x.status)}">${esc(x.status)}</span></td><td data-label="Mode">${esc(x.mode || '—')}</td></tr>`), sum(L.map(x => x.paid)));
+}
 
 /* ---------- Donate (residents) ---------- */
 const fmtPhone = p => { const d = String(p || '').replace(/\D/g, '').slice(-10); return d.length === 10 ? `${d.slice(0, 5)} ${d.slice(5)}` : p; };
@@ -1882,11 +1939,13 @@ document.addEventListener('submit', e => {
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.filter) { UI.col[el.dataset.filter] = el.value; updateColList(); }
+  if (el.dataset.lg === 'q') { LG.q = el.value; const l = $('#lg-list'); if (l) l.innerHTML = ledgerList(); }
 });
 document.addEventListener('change', async e => {
   const el = e.target;
   if (el.name === 'status' && el.closest('form[data-form=donation]')) { const p = $('[data-part]'); if (p) p.hidden = el.value !== 'Part'; }
   if (el.matches('[data-pick]')) { addPending(el.files); el.value = ''; }
+  if (el.dataset.lg && el.dataset.lg !== 'q') { LG[el.dataset.lg] = el.value; if (el.dataset.lg === 'sec') LG.st = ''; render(); }
   if (el.matches('[data-join]') && el.value) {
     const d = S.drives.find(x => x.id === el.dataset.join); (d.volunteerIds ||= []).push(el.value); save(); render(); toast(`${volName(el.value)} joined the drive 🙋`);
   }
