@@ -486,6 +486,7 @@ RENDER.dashboard = () => {
     ${kpi('This week', inr(weekAmt), `since ${fmtD(mondayOf(t))}`)}
     ${kpi('Homes contributed', `${households()}${st.homes ? `<span class="muted" style="font-size:.9rem"> / ${st.homes}</span>` : ''}`, st.homes ? `${pctOf(households(), st.homes).toFixed(1)}% of homes · avg ${inr(avg)}` : `avg ${inr(avg)}`)}
     ${kpi('Pledged, still due', inr(T.pledgedPending), `${T.pendingCount} pledge${T.pendingCount === 1 ? '' : 's'}`)}
+    ${(c => kpi('Cash collected', inr(c.total), c.inHand ? `${inr(c.inHand)} still in hand` : 'all deposited', c.inHand ? 'warn' : ''))(cashStats())}
     ${kpi('Reminders due', due.length, 'today or overdue', due.length ? 'warn' : '')}
   </section>
 
@@ -604,6 +605,7 @@ RENDER.collections = () => {
     <button class="btn ghost" data-act="exportCSV">⬇ Export CSV</button>
   </div>
   <section class="card"><div class="card-h"><h2>Day-wise summary</h2><span class="muted small">Tap a day to filter the list</span></div>${daySummary()}</section>
+  <section class="card" id="cash"><div class="card-h"><h2>💵 Cash collection</h2><span class="muted small">Kept separate from UPI until it reaches the temple account</span></div>${cashSection()}</section>
   <section class="card">
     <div class="card-h"><h2>All collections</h2></div>
     <div class="filters">
@@ -621,6 +623,21 @@ RENDER.collections = () => {
     ${proofGallery()}
   </section>`;
 };
+function cashStats() {
+  const cash = S.donations.filter(d => d.mode === 'Cash');
+  const held = cash.filter(d => !d.depositedOn);
+  const byHolder = {}; held.forEach(d => { const k = d.cashWith || d.collectedBy || 'Not recorded'; (byHolder[k] ||= []).push(d); });
+  return { cash, held, byHolder, total: sum(cash.map(d => d.amount)), inHand: sum(held.map(d => d.amount)), deposited: sum(cash.filter(d => d.depositedOn).map(d => d.amount)) };
+}
+function cashSection() {
+  const c = cashStats();
+  if (!c.cash.length) return empty('No cash collections yet. When you add a collection with mode <b>Cash</b>, note who is holding it — it shows here until it is deposited.');
+  const online = sum(S.donations.filter(d => d.mode !== 'Cash').map(d => d.amount));
+  return `<div class="week-nums"><div><b>${inr(c.total)}</b><span>cash collected · ${c.cash.length} entries</span></div><div><b>${inr(c.deposited)}</b><span>deposited to temple account</span></div><div><b${c.inHand ? ' style="color:var(--warn)"' : ''}>${inr(c.inHand)}</b><span>still in hand</span></div><div><b>${inr(online)}</b><span>online (UPI / bank / cheque)</span></div></div>
+  ${c.held.length ? `<h3 style="margin:14px 0 6px">Cash in hand — by volunteer</h3><div class="rem-list">${Object.entries(c.byHolder).sort((a, b) => sum(b[1].map(d => d.amount)) - sum(a[1].map(d => d.amount))).map(([who, list]) => `<div class="rem overdue"><div><div class="who">${esc(who)} · ${inr(sum(list.map(d => d.amount)))}</div>
+    <div class="meta">${list.map(d => `${esc(d.donor)} (${esc(d.flat)}) ${inr(d.amount)} · ${fmtD(d.date)}`).join(' · ')}</div></div>
+    <div class="row-actions"><button class="btn sm" data-act="depositCash" data-who="${esc(who)}">✅ Mark deposited today</button></div></div>`).join('')}</div>` : '<p class="small" style="margin:10px 0 0">✅ All cash has been deposited.</p>'}`;
+}
 function daySummary() {
   const g = {};
   S.donations.forEach(d => {
@@ -1134,7 +1151,9 @@ function donationForm(d = {}) {
       </div>
     </fieldset>
     <fieldset><legend>Mode</legend>${radios('mode', MODES, d.mode || 'UPI')}
-      <label>UPI txn ID / receipt book no.<input name="ref" value="${esc(d.ref || '')}"></label></fieldset>
+      <label>UPI txn ID / receipt book no.<input name="ref" value="${esc(d.ref || '')}"></label>
+      <div class="grid2"><label>Cash held by <span class="muted small">(cash only)</span><input name="cashWith" list="vol-list" value="${esc(d.cashWith || '')}" placeholder="Who has the cash now"></label>
+      <label>Deposited to temple account on <span class="muted small">(cash only)</span><input type="date" name="depositedOn" value="${esc(d.depositedOn || '')}"></label></div></fieldset>
     <label>Notes<textarea name="notes" rows="2">${esc(d.notes || '')}</textarea></label>
     ${dropzone('Attach receipt(s)')}
     ${cancelSave()}
@@ -1229,6 +1248,7 @@ const FORMS = {
       status: fd.status || 'Full', mode: fd.mode || 'UPI', ref: fd.ref.trim(), collectedBy: fd.collectedBy.trim(), notes: fd.notes.trim(),
       committed: fd.status === 'Part' ? Math.round(+fd.committed || 0) : 0, reminderDate: fd.reminderDate || '',
       receiptIds: [...(d ? pending.keep : []), ...newIds],
+      cashWith: fd.mode === 'Cash' ? (fd.cashWith || '').trim() || fd.collectedBy.trim() : '', depositedOn: fd.mode === 'Cash' ? fd.depositedOn || '' : '',
     };
     if (d) Object.assign(d, rec); else { d = { id: uid(), created: Date.now(), ...rec }; S.donations.push(d); }
     let msg = 'Collection saved 🙏';
@@ -1537,8 +1557,13 @@ const ACTIONS = {
     const lines = days.map(d => { const ds = S.donations.filter(x => x.date === d); return ds.length ? `${fmtWD(d)}: ${inr(sum(ds.map(x => x.amount)))} (${ds.length} entr${ds.length === 1 ? 'y' : 'ies'})` : null; }).filter(Boolean);
     openWA('', `📒 *Weekly ledger — ${S.settings.temple}*\nWeek of ${fmtD(ws)}\n\n${lines.join('\n') || 'No collections recorded yet this week.'}\n\n*This week:* ${inr(sumRange(ws, t))}\n*Total achieved:* ${lakh(T.achieved)} of ${lakh(S.settings.target)} (${T.pct.toFixed(1)}%)\n*Pledged, still due:* ${inr(T.pledgedPending)}\n*Remaining:* ${lakh(T.remaining)} · ${T.daysLeft} days to Prana Pratishtha\n\nEvery rupee receipted 🙏 Har Har Mahadev`);
   },
+  depositCash: ds => {
+    const list = cashStats().byHolder[ds.who] || [];
+    if (!list.length || !confirm(`Mark ${inr(sum(list.map(d => d.amount)))} cash held by ${ds.who} as deposited to the temple account today?`)) return;
+    list.forEach(d => d.depositedOn = today()); save(); render(); toast('Cash marked as deposited ✅');
+  },
   exportCSV: () => {
-    const cols = ['date', 'donor', 'phone', 'tower', 'flat', 'amount', 'status', 'committed', 'mode', 'ref', 'collectedBy', 'notes'];
+    const cols = ['date', 'donor', 'phone', 'tower', 'flat', 'amount', 'status', 'committed', 'mode', 'ref', 'collectedBy', 'cashWith', 'depositedOn', 'notes'];
     const rows = [...S.donations].sort((a, b) => a.date.localeCompare(b.date)).map(d => cols.map(c => d[c] ?? '').concat((d.receiptIds || []).length));
     download(`collections-${today()}.csv`, toCSV([[...cols, 'receipts'], ...rows]), 'text/csv');
   },
