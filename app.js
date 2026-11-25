@@ -131,9 +131,8 @@ const FILMS = {
 const VID = 'assets/video/';
 // First 3 days of the door-to-door drive (from the drive update). Dates assumed; replace with per-flat entries when available.
 const SEED_DONATIONS = [
-  ['seed-d1', '2026-11-21', 'Day 1 drive — consolidated', 10000, ''], ['seed-d2', '2026-11-22', 'Day 2 drive — consolidated', 8100, ''],
-  ['seed-d3', '2026-11-23', 'Day 3 drive — consolidated', 24206, '9 flats'],
-  ['seed-d4', '2026-11-24', '24 Nov — UPI (details in private ledger)', 1100, '1 flat', 'Tower L'],
+  ['seed-d1', '2026-11-22', 'Day 1 drive — consolidated', 10000, ''], ['seed-d2', '2026-11-23', 'Day 2 drive — consolidated', 8100, ''],
+  ['seed-d3', '2026-11-24', 'Day 3 drive — consolidated', 24206, '9 flats'],
   ['seed-d5', '2026-11-25', 'Cash collected 21–25 Nov — consolidated', 10100, '', 'Various towers', 'Cash', 'Mr. Ram'],
 ].map(([id, date, donor, amount, n, tower = 'Tower A & B', mode = 'UPI', cashWith = '']) => ({ id, created: 1, households: parseInt(n) || 0, date, donor, phone: '', tower, cashWith, flat: n || '—', amount, status: 'Full', mode, ref: '', collectedBy: 'Seva team', notes: 'Consolidated day total from the drive update — replace with per-flat entries', receiptIds: [], consolidated: true }));
 const SEED_PLEDGES = [{ id: 'seed-p1', created: 1, donor: 'Drive pledges — consolidated', phone: '', tower: 'Tower A & B', flat: '—', amount: 115001, paid: 0, mode: 'UPI', dueDate: '2026-11-30', reminderDate: '2026-11-29', status: 'Pending', notes: '≈ ₹1,15,001 committed in Day 1–3 to pay by 30 Nov / salary day — split into individual pledges', consolidated: true }];
@@ -163,7 +162,7 @@ function defaults() {
     donations: SEED_DONATIONS.map(d => ({ ...d })), pledges: SEED_PLEDGES.map(p => ({ ...p })), volunteers: [], drives: [], polls: defaultPolls(),
     weekPlans: {}, dayProofs: [], presentation: { photos: [], videoFileId: null },
     sevas: DEFAULT_SEVAS.map(s => ({ ...s, bookings: [] })), idols: DEFAULT_IDOLS.map(x => ({ ...x })),
-    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 8 },
+    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 9 },
   };
 }
 // Real figures from the fundraising deck / all-in-one brief: ₹10.50 L achieved incl. the first 3 days (₹42,306).
@@ -241,9 +240,12 @@ function migrate7(s) {
   return s;
 }
 /* v8+: add any new published day totals (seed-d*) that this phone doesn't have yet. */
-const SEED_VERSION = 8;
+const SEED_VERSION = 9;
 function migrateSeeds(s) {
   if ((s.meta?.version || 1) >= SEED_VERSION) return s;
+  // v9: drive Day 1–3 were 22–24 Nov; the separate 24 Nov ₹1,100 is already inside Day 3.
+  s.donations = (s.donations || []).filter(d => d.id !== 'seed-d4');
+  s.donations.forEach(d => { const sd = SEED_DONATIONS.find(x => x.id === d.id && /^seed-d[123]$/.test(x.id)); if (sd) d.date = sd.date; });
   const have = new Set((s.donations || []).map(d => d.id));
   SEED_DONATIONS.filter(d => !have.has(d.id)).forEach(d => (s.donations ||= []).push({ ...d }));
   s.meta = { version: SEED_VERSION };
