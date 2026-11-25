@@ -115,7 +115,7 @@ const DEFAULT_SEVAS = [
   ['seva6', 'Dwarapalaka (door guardians)', 50000, 1], ['seva8', 'Temple bells (Ghanta)', 51000, 1], ['seva9', 'Dhwaja & Trishul', 51000, 1],
 ].map(([id, name, amount, slots]) => ({ id, name, amount, slots, bookings: [] }));
 const DEFAULT_IDOLS = [
-  ['Narmadeshwar Shivling', 'Shri Murali ji', 0, ''], ['Ganesh Ji', 'Shri Deepak ji', 0, ''], ['Hanuman Ji', 'Shri Ram Dwivedi ji & Shri Devendra ji', 0, 'Red stone murti'],
+  ['Narmadeshwar Shivling', 'Shri Murali ji', 0, ''], ['Ganesh Ji', 'Shri Deepak ji', 0, ''], ['Hanuman Ji', 'Gupt Daan 🙏', 0, 'Red stone murti'],
   ['Nandi Ji', '', 100000, 'Black stone murti & Pratishtha'], ['Kartik Ji', '', 100000, 'Marble murti'], ['Mata Parvati', '', 100000, 'Marble murti'],
 ].map(([name, sponsor, amount, note], i) => ({ id: 'idol' + i, name, sponsor, amount, note }));
 const FILMS = {
@@ -157,7 +157,7 @@ function defaults() {
     donations: SEED_DONATIONS.map(d => ({ ...d })), pledges: SEED_PLEDGES.map(p => ({ ...p })), volunteers: [], drives: [], polls: defaultPolls(),
     weekPlans: {}, dayProofs: [], presentation: { photos: [], videoFileId: null },
     sevas: DEFAULT_SEVAS.map(s => ({ ...s, bookings: [] })), idols: DEFAULT_IDOLS.map(x => ({ ...x })),
-    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 3 },
+    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 4 },
   };
 }
 // Real figures from the fundraising deck / all-in-one brief: ₹10.50 L achieved incl. the first 3 days (₹42,306).
@@ -201,12 +201,19 @@ function migrate3(s) {
   s.meta = { version: 3 };
   return s;
 }
+function migrate4(s) {
+  if ((s.meta?.version || 1) >= 4) return s;
+  const h = (s.idols || []).find(x => x.name === 'Hanuman Ji');
+  if (h && h.sponsor) h.sponsor = 'Gupt Daan 🙏';
+  s.meta = { version: 4 };
+  return s;
+}
 
 /* ---------- persistence ---------- */
 const KEY = 'templeFundDrive.v1';
 function merge(o) {
   const d = defaults();
-  const o2 = migrate3(migrate({ ...o, settings: { ...(o.settings || {}) }, donations: o.donations || [], pledges: o.pledges || [], volunteers: o.volunteers || [], drives: o.drives || [] }));
+  const o2 = migrate4(migrate3(migrate({ ...o, settings: { ...(o.settings || {}) }, donations: o.donations || [], pledges: o.pledges || [], volunteers: o.volunteers || [], drives: o.drives || [] })));
   return { ...d, ...o2, settings: { ...d.settings, ...o2.settings }, presentation: { ...d.presentation, ...(o2.presentation || {}) } };
 }
 function load() {
