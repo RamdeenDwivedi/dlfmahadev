@@ -57,7 +57,7 @@ Why we are here: {temple} is coming up inside our own society, beside Towers L�
 
 Progress so far: {achieved} of our {target} goal has been received ({pct}%). We need {remaining} more through this door-to-door seva drive — {daysLeft} days to go.
 
-Our request: family seva starts from {min} (₹5,101 • ₹11,001 • ₹21,001 • ₹51,001 • ₹1,00,001+), and families can also sponsor a part of the temple, such as a stone pillar or the Nandi. It is completely voluntary — there is no pressure at all. Tan, Man or Dhan: every offering given with devotion is welcome. You may also pledge now and pay by 30 Nov / salary day.
+Our request: family seva starts from {min} (₹5,101 • ₹11,001 • ₹21,001 • ₹51,001 • ₹1,00,001+), and families can also sponsor a part of the temple, such as a stone pillar or the main temple door. It is completely voluntary — there is no pressure at all. Tan, Man or Dhan: every offering given with devotion is welcome. You may also pledge now and pay by 30 Nov / salary day.
 
 Payment: HDFC UPI {upi} (GPay, PhonePe, Paytm, cards or netbanking) or cash. Every rupee is receipted and shared on a weekly ledger, and contributors are honoured on the black-stone donor plaque.
 
@@ -72,7 +72,7 @@ const DEFAULT_SCRIPT_HI = `ॐ नमः शिवाय / हर हर मह�
 
 अब तक की प्रगति: कुल लक्ष्य {target} में से {achieved} ({pct}%) प्राप्त हो चुके हैं। इस घर-घर सेवा अभियान से हमें {remaining} और चाहिए — {daysLeft} दिन शेष।
 
-हमारा निवेदन: पारिवारिक सेवा {min} से आरम्भ (₹5,101 • ₹11,001 • ₹21,001 • ₹51,001 • ₹1,00,001+); आप मंदिर का कोई भाग, जैसे पत्थर का स्तंभ या नंदी, भी समर्पित कर सकते हैं। यह पूरी तरह स्वैच्छिक है — किसी भी प्रकार का दबाव नहीं। तन, मन या धन — श्रद्धा से दी गई हर सेवा का स्वागत है। आप अभी संकल्प करके 30 नवंबर / वेतन दिवस तक भी दे सकते हैं।
+हमारा निवेदन: पारिवारिक सेवा {min} से आरम्भ (₹5,101 • ₹11,001 • ₹21,001 • ₹51,001 • ₹1,00,001+); आप मंदिर का कोई भाग, जैसे पत्थर का स्तंभ या मुख्य द्वार, भी समर्पित कर सकते हैं। यह पूरी तरह स्वैच्छिक है — किसी भी प्रकार का दबाव नहीं। तन, मन या धन — श्रद्धा से दी गई हर सेवा का स्वागत है। आप अभी संकल्प करके 30 नवंबर / वेतन दिवस तक भी दे सकते हैं।
 
 भुगतान: HDFC UPI {upi} (GPay, PhonePe, Paytm, कार्ड, नेटबैंकिंग) या नकद। हर रुपये की रसीद दी जाती है और साप्ताहिक हिसाब साझा किया जाता है; योगदानकर्ताओं के नाम काले पत्थर की दानदाता पट्टिका पर अंकित होंगे।
 
@@ -116,7 +116,7 @@ const DEFAULT_SEVAS = [
 ].map(([id, name, amount, slots]) => ({ id, name, amount, slots, bookings: [] }));
 const DEFAULT_IDOLS = [
   ['Narmadeshwar Shivling', 'Shri Murali ji', 0, ''], ['Ganesh Ji', 'Shri Deepak ji', 0, ''], ['Hanuman Ji', 'Gupt Daan 🙏', 0, 'Red stone murti'],
-  ['Nandi Ji', '', 100000, 'Black stone murti & Pratishtha'], ['Kartik Ji', '', 100000, 'Marble murti'], ['Mata Parvati', '', 100000, 'Marble murti'],
+  ['Nandi Ji', 'Gupt Daan 🙏', 100000, 'Black stone murti & Pratishtha'], ['Kartik Ji', '', 100000, 'Marble murti'], ['Mata Parvati', '', 100000, 'Marble murti'],
 ].map(([name, sponsor, amount, note], i) => ({ id: 'idol' + i, name, sponsor, amount, note }));
 const FILMS = {
   short: { label: '1-minute film', en: 'film-1min-en.mp4', hi: 'film-1min-hi.mp4', poster: 'poster-1min.jpg',
@@ -157,7 +157,7 @@ function defaults() {
     donations: SEED_DONATIONS.map(d => ({ ...d })), pledges: SEED_PLEDGES.map(p => ({ ...p })), volunteers: [], drives: [], polls: defaultPolls(),
     weekPlans: {}, dayProofs: [], presentation: { photos: [], videoFileId: null },
     sevas: DEFAULT_SEVAS.map(s => ({ ...s, bookings: [] })), idols: DEFAULT_IDOLS.map(x => ({ ...x })),
-    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 4 },
+    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 5 },
   };
 }
 // Real figures from the fundraising deck / all-in-one brief: ₹10.50 L achieved incl. the first 3 days (₹42,306).
@@ -208,12 +208,19 @@ function migrate4(s) {
   s.meta = { version: 4 };
   return s;
 }
+function migrate5(s) {
+  if ((s.meta?.version || 1) >= 5) return s;
+  const n = (s.idols || []).find(x => x.name === 'Nandi Ji');
+  if (n && !n.sponsor) n.sponsor = 'Gupt Daan 🙏';
+  s.meta = { version: 5 };
+  return s;
+}
 
 /* ---------- persistence ---------- */
 const KEY = 'templeFundDrive.v1';
 function merge(o) {
   const d = defaults();
-  const o2 = migrate4(migrate3(migrate({ ...o, settings: { ...(o.settings || {}) }, donations: o.donations || [], pledges: o.pledges || [], volunteers: o.volunteers || [], drives: o.drives || [] })));
+  const o2 = migrate5(migrate4(migrate3(migrate({ ...o, settings: { ...(o.settings || {}) }, donations: o.donations || [], pledges: o.pledges || [], volunteers: o.volunteers || [], drives: o.drives || [] }))));
   return { ...d, ...o2, settings: { ...d.settings, ...o2.settings }, presentation: { ...d.presentation, ...(o2.presentation || {}) } };
 }
 function load() {
@@ -987,7 +994,7 @@ RENDER.script = () => {
       <li>Keep the introduction to <b>2 minutes</b>; offer the 10-minute presentation only if they're interested.</li>
       <li>Suggested contribution: <b>${inr(st.minDonation)} or more</b> per family — any amount given with devotion is welcome.</li>
       <li>Accept <b>HDFC UPI${st.upi ? ` (${esc(st.upi)})` : ''}</b> or <b>cash</b>. Always issue a receipt and photograph it.</li>
-      <li>Offer the <b>seva options</b>: family tiers from ${inr(st.minDonation)}, temple-part sponsorship (pillar, Nandi…) and open idols (see the Seva tab).</li>
+      <li>Offer the <b>seva options</b>: family tiers from ${inr(st.minDonation)}, temple-part sponsorship (pillar, main door…) and open idols (see the Seva tab).</li>
       <li>If they wish to give later, record a <b>pledge</b> with a reminder date — the app will remind you.</li>
       <li>Visit in pairs, wear the seva ID, respect "do not disturb" timings.</li>
     </ul></section>
