@@ -1086,6 +1086,13 @@ function ytEmbed(url) {
   const m = String(url).match(/(?:youtu\.be\/|v=|shorts\/|embed\/|live\/)([\w-]{11})/);
   return m ? `https://www.youtube.com/embed/${m[1]}` : null;
 }
+const AUDIO = { en: { file: 'assets/audio/visit-script-en.m4a', label: 'English · 1:46' }, hi: { file: 'assets/audio/visit-script-hi.m4a', label: 'हिन्दी · 1:57' } };
+function scriptAudio() {
+  const a = AUDIO[UI.lang] || AUDIO.en;
+  return `<div class="audio-box"><div class="small"><b>🔊 Listen to the script</b> <span class="muted">(${a.label}): practise before a visit, or play it at the door</span></div>
+    <audio controls preload="none" src="${a.file}"></audio>
+    <div class="row-actions"><button class="btn sm wa" data-act="shareAudio">📤 Share audio on WhatsApp</button><a class="btn sm" href="${a.file}" download>⬇ Download</a></div></div>`;
+}
 RENDER.script = () => {
   const st = S.settings, pr = S.presentation;
   const mapQ = st.mapQuery || st.address;
@@ -1108,6 +1115,7 @@ RENDER.script = () => {
       <div class="card-h"><h2>2-minute introduction</h2>
         <div class="seg"><label><input type="radio" name="lang" value="en" data-lang ${UI.lang === 'en' ? 'checked' : ''}> English</label><label><input type="radio" name="lang" value="hi" data-lang ${UI.lang === 'hi' ? 'checked' : ''}> हिन्दी</label></div></div>
       ${timerHTML('script')}
+      ${scriptAudio()}
       <div class="script">${esc(fillTpl(scriptTpl())).replace(/\n/g, '<br>')}</div>
       <div class="row-actions" style="margin-top:10px"><button class="btn sm" data-act="copyScript">Copy</button><button class="btn sm wa" data-act="shareScript">Share with volunteers</button><button class="btn sm" data-act="editScript">✏️ Edit script</button></div>
       <p class="hint" style="margin-top:8px">Numbers (achieved, remaining, days left) update automatically from the dashboard.</p>
@@ -1699,6 +1707,15 @@ const ACTIONS = {
     openWA('', `📒 *Weekly ledger — ${S.settings.temple}*\nWeek of ${fmtD(ws)}\n\n${lines.join('\n') || 'No collections recorded yet this week.'}\n\n*This week:* ${inr(sumRange(ws, t))}\n*Total achieved:* ${lakh(T.achieved)} of ${lakh(S.settings.target)} (${T.pct.toFixed(1)}%)\n*Pledged, still due:* ${inr(T.pledgedPending)}\n*Remaining:* ${lakh(T.remaining)} · ${T.daysLeft} days to Prana Pratishtha\n\nEvery rupee receipted 🙏 Har Har Mahadev`);
   },
   selfDonate: () => selfDonateForm(),
+  shareAudio: async () => {
+    const a = AUDIO[UI.lang] || AUDIO.en, name = `Temple-visit-script-${UI.lang === 'hi' ? 'Hindi' : 'English'}.m4a`;
+    try {
+      const blob = await (await fetch(a.file)).blob(), file = new File([blob], name, { type: 'audio/mp4' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) return await navigator.share({ files: [file], text: `🔊 ${S.settings.temple}: 2-minute visit script (${a.label}). Har Har Mahadev 🙏` });
+    } catch (e) { if (e.name === 'AbortError') return; }
+    const l = document.createElement('a'); l.href = a.file; l.download = name; l.click();
+    toast('Audio downloaded. Attach it in WhatsApp with 📎');
+  },
   acceptSub: ds => {
     const x = S.submissions.find(v => v.id === ds.id); if (!x) return;
     const d = { id: uid(), created: Date.now(), date: x.date, donor: x.donor, phone: x.phone, tower: x.tower, flat: x.flat, occupancy: x.occupancy, amount: x.amount,
