@@ -133,8 +133,8 @@ const VID = 'assets/video/';
 const SEED_DONATIONS = [
   ['seed-d1', '2026-11-22', 'Day 1 drive — consolidated', 10000, ''], ['seed-d2', '2026-11-23', 'Day 2 drive — consolidated', 8100, ''],
   ['seed-d3', '2026-11-24', 'Day 3 drive — consolidated', 24206, '9 flats'],
-  ['seed-d5', '2026-11-25', 'Cash collected 21–25 Nov — consolidated', 10100, '', 'Various towers', 'Cash', 'Mr. Ram'],
-].map(([id, date, donor, amount, n, tower = 'Tower A & B', mode = 'UPI', cashWith = '']) => ({ id, created: 1, households: parseInt(n) || 0, date, donor, phone: '', tower, cashWith, flat: n || '—', amount, status: 'Full', mode, ref: '', collectedBy: 'Seva team', notes: 'Consolidated day total from the drive update — replace with per-flat entries', receiptIds: [], consolidated: true }));
+  ['seed-d5', '2026-11-25', 'Cash collected 21–25 Nov — consolidated', 10100, '', 'Various towers', 'Cash', 'Mr. Ram', '2026-11-21'],
+].map(([id, date, donor, amount, n, tower = 'Tower A & B', mode = 'UPI', cashWith = '', dateFrom = '']) => ({ id, created: 1, ...(dateFrom ? { dateFrom } : {}), households: parseInt(n) || 0, date, donor, phone: '', tower, cashWith, flat: n || '—', amount, status: 'Full', mode, ref: '', collectedBy: 'Seva team', notes: 'Consolidated day total from the drive update — replace with per-flat entries', receiptIds: [], consolidated: true }));
 const SEED_PLEDGES = [{ id: 'seed-p1', created: 1, donor: 'Drive pledges — consolidated', phone: '', tower: 'Tower A & B', flat: '—', amount: 115001, paid: 0, mode: 'UPI', dueDate: '2026-11-30', reminderDate: '2026-11-29', status: 'Pending', notes: '≈ ₹1,15,001 committed in Day 1–3 to pay by 30 Nov / salary day — split into individual pledges', consolidated: true }];
 const LETTER_TOWERS = [...'ABCDEFGHJKLMNOPQRSTUV'].map(c => `Tower ${c}`); // 21 towers, there is no Tower I
 
@@ -162,7 +162,7 @@ function defaults() {
     donations: SEED_DONATIONS.map(d => ({ ...d })), pledges: SEED_PLEDGES.map(p => ({ ...p })), volunteers: [], drives: [], polls: defaultPolls(),
     weekPlans: {}, dayProofs: [], presentation: { photos: [], videoFileId: null },
     sevas: DEFAULT_SEVAS.map(s => ({ ...s, bookings: [] })), idols: DEFAULT_IDOLS.map(x => ({ ...x })),
-    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 9 },
+    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 10 },
   };
 }
 // Real figures from the fundraising deck / all-in-one brief: ₹10.50 L achieved incl. the first 3 days (₹42,306).
@@ -240,12 +240,13 @@ function migrate7(s) {
   return s;
 }
 /* v8+: add any new published day totals (seed-d*) that this phone doesn't have yet. */
-const SEED_VERSION = 9;
+const SEED_VERSION = 10;
 function migrateSeeds(s) {
   if ((s.meta?.version || 1) >= SEED_VERSION) return s;
   // v9: drive Day 1–3 were 22–24 Nov; the separate 24 Nov ₹1,100 is already inside Day 3.
   s.donations = (s.donations || []).filter(d => d.id !== 'seed-d4');
   s.donations.forEach(d => { const sd = SEED_DONATIONS.find(x => x.id === d.id && /^seed-d[123]$/.test(x.id)); if (sd) d.date = sd.date; });
+  const c5 = s.donations.find(d => d.id === 'seed-d5'); if (c5) c5.dateFrom = '2026-11-21';
   const have = new Set((s.donations || []).map(d => d.id));
   SEED_DONATIONS.filter(d => !have.has(d.id)).forEach(d => (s.donations ||= []).push({ ...d }));
   s.meta = { version: SEED_VERSION };
@@ -342,7 +343,7 @@ function totals() {
   const remaining = Math.max(0, (+st.target || 0) - achieved);
   const daysLeft = Math.max(0, diffDays(t, st.deadline) + 1);
   const perDay = daysLeft ? remaining / daysLeft : remaining;
-  const todays = S.donations.filter(d => d.date === t);
+  const todays = dated().filter(d => d.date === t);
   const pend = S.pledges.filter(p => p.status === 'Pending');
   return {
     collected, achieved, remaining, daysLeft, perDay, pct: pctOf(achieved, st.target),
@@ -350,8 +351,15 @@ function totals() {
     pledgedPending: sum(pend.map(p => p.amount - (p.paid || 0))), pendingCount: pend.length,
   };
 }
-function dayTotals() { const m = {}; S.donations.forEach(d => { m[d.date] = (m[d.date] || 0) + (+d.amount || 0); }); return m; }
-function sumRange(a, b) { return sum(S.donations.filter(d => d.date >= a && d.date <= b).map(d => d.amount)); }
+// Entries with dateFrom cover several days (e.g. cash 21–25 Nov) and are not shown as one day's collection.
+const spanLabel = d => `${fmtD(d.dateFrom)} – ${fmtD(d.date)}`;
+const dated = () => S.donations.filter(d => !d.dateFrom);
+function dayTotals() { const m = {}; dated().forEach(d => { m[d.date] = (m[d.date] || 0) + (+d.amount || 0); }); return m; }
+function sumRange(a, b) { return sum(S.donations.filter(d => (d.dateFrom || d.date) >= a && d.date <= b).map(d => d.amount)); }
+function spanNote() {
+  const sp = S.donations.filter(d => d.dateFrom);
+  return sp.length ? `<p class="small muted" style="margin:8px 0 0">Not shown as bars: ${sp.map(d => `<b>${inr(d.amount)}</b> ${esc(d.mode.toLowerCase())} collected ${spanLabel(d)} (not split by day)`).join(' · ')}. It is included in the total.</p>` : '';
+}
 function towerStats() {
   const m = {}; S.settings.towers.forEach(t => m[t] = { amount: 0, count: 0 });
   S.donations.forEach(d => { (m[d.tower] ||= { amount: 0, count: 0 }); m[d.tower].amount += +d.amount || 0; m[d.tower].count++; });
@@ -529,7 +537,7 @@ RENDER.dashboard = () => {
 
   <section class="card">
     <div class="card-h"><h2>Day-wise collections</h2><span class="muted small">Dashed line = amount needed per day to hit the target</span></div>
-    <div class="chart-scroll">${dailyChart()}</div>
+    <div class="chart-scroll">${dailyChart()}</div>${spanNote()}
   </section>
 
   <div class="grid-2">
@@ -554,7 +562,7 @@ RENDER.dashboard = () => {
 
 function dailyChart() {
   const st = S.settings, t = today(), T = totals();
-  const dates = S.donations.map(d => d.date).filter(Boolean).sort();
+  const dates = dated().map(d => d.date).filter(Boolean).sort();
   let start = dates[0] && dates[0] < t ? dates[0] : t;
   if (diffDays(start, t) > 30) start = addDays(t, -30);
   if (diffDays(start, t) < 6) start = addDays(t, -6);
@@ -828,23 +836,23 @@ function cashSection() {
   const online = sum(S.donations.filter(d => d.mode !== 'Cash').map(d => d.amount));
   return `<div class="week-nums"><div><b>${inr(c.total)}</b><span>cash collected · ${c.cash.length} entries</span></div><div><b>${inr(c.deposited)}</b><span>deposited to temple account</span></div><div><b${c.inHand ? ' style="color:var(--warn)"' : ''}>${inr(c.inHand)}</b><span>still in hand</span></div><div><b>${inr(online)}</b><span>online (UPI / bank / cheque)</span></div></div>
   ${c.held.length ? `<h3 style="margin:14px 0 6px">Cash in hand — by volunteer</h3><div class="rem-list">${Object.entries(c.byHolder).sort((a, b) => sum(b[1].map(d => d.amount)) - sum(a[1].map(d => d.amount))).map(([who, list]) => `<div class="rem overdue"><div><div class="who">${esc(who)} · ${inr(sum(list.map(d => d.amount)))}</div>
-    <div class="meta">${list.map(d => `${esc(d.donor)} (${esc(d.flat)}) ${inr(d.amount)} · ${fmtD(d.date)}`).join(' · ')}</div></div>
+    <div class="meta">${list.map(d => `${esc(d.donor)} (${esc(d.flat)}) ${inr(d.amount)} · ${d.dateFrom ? spanLabel(d) : fmtD(d.date)}`).join(' · ')}</div></div>
     <div class="row-actions"><button class="btn sm" data-act="depositCash" data-who="${esc(who)}">✅ Mark deposited today</button></div></div>`).join('')}</div>` : '<p class="small" style="margin:10px 0 0">✅ All cash has been deposited.</p>'}`;
 }
 function daySummary() {
   const g = {};
   S.donations.forEach(d => {
-    const r = g[d.date] ||= { n: 0, upi: 0, cash: 0, other: 0, tot: 0, rc: 0 };
+    const r = g[d.dateFrom ? d.dateFrom + '~' + d.date : d.date] ||= { n: 0, upi: 0, cash: 0, other: 0, tot: 0, rc: 0 };
     r.n++; r.tot += +d.amount || 0; r.rc += (d.receiptIds || []).length;
     if (d.mode === 'UPI') r.upi += +d.amount || 0; else if (d.mode === 'Cash') r.cash += +d.amount || 0; else r.other += +d.amount || 0;
   });
   const days = Object.keys(g).sort().reverse();
   if (!days.length) return empty('No collections yet. Tap <b>+ Add collection</b> after each visit.');
-  const proofs = d => S.dayProofs.filter(p => p.date === d).reduce((s, p) => s + p.fileIds.length, 0);
+  const proofs = d => d.includes('~') ? 0 : S.dayProofs.filter(p => p.date === d).reduce((s, p) => s + p.fileIds.length, 0);
   const tot = k => sum(days.map(d => g[d][k]));
   return `<div class="table-wrap"><table style="min-width:560px"><thead><tr><th>Date</th><th class="r">Donors</th><th class="r">UPI</th><th class="r">Cash</th><th class="r">Other</th><th class="r">Total</th><th class="r">Receipts</th></tr></thead><tbody>
-  ${days.map(d => { const r = g[d]; return `<tr class="click" data-act="filterDate" data-date="${d}">
-    <td data-label="Date"><b>${fmtWD(d)}</b>${d === today() ? ' <span class="badge accent">Today</span>' : ''}</td>
+  ${days.map(d => { const r = g[d], sp = d.includes('~') ? d.split('~') : null; return `<tr class="click" data-act="filterDate" data-date="${sp ? sp[1] : d}">
+    <td data-label="Date"><b>${sp ? `${fmtD(sp[0])} – ${fmtD(sp[1])}` : fmtWD(d)}</b>${sp ? ' <span class="muted small">not split by day</span>' : d === today() ? ' <span class="badge accent">Today</span>' : ''}</td>
     <td class="r" data-label="Donors">${r.n}</td><td class="r" data-label="UPI">${inr(r.upi)}</td><td class="r" data-label="Cash">${inr(r.cash)}</td>
     <td class="r" data-label="Other">${inr(r.other)}</td><td class="r" data-label="Total"><b>${inr(r.tot)}</b></td>
     <td class="r" data-label="Receipts">${r.rc + proofs(d)}</td></tr>`; }).join('')}
@@ -860,7 +868,7 @@ function colList() {
   return `<p class="small muted" style="margin:0 0 8px">${list.length} entr${list.length === 1 ? 'y' : 'ies'} · <b>${inr(sum(list.map(d => d.amount)))}</b></p>
   <div class="table-wrap"><table class="rtable"><thead><tr><th>Date</th><th>Donor</th><th>Tower / Flat</th><th class="r">Amount</th><th>Paid</th><th>Mode</th><th>Collected by</th><th>Receipts</th><th></th></tr></thead><tbody>
   ${list.map(d => `<tr>
-    <td data-label="Date">${fmtD(d.date)}</td>
+    <td data-label="Date">${d.dateFrom ? spanLabel(d) : fmtD(d.date)}</td>
     <td data-label="Donor"><b>${esc(d.donor)}</b>${d.phone ? `<div class="small muted">${esc(d.phone)}</div>` : ''}</td>
     <td data-label="Tower / Flat">${esc(d.tower)} · ${esc(d.flat)}</td>
     <td class="r" data-label="Amount"><b>${inr(d.amount)}</b>${d.status === 'Part' && d.committed ? `<div class="small muted">of ${inr(d.committed)}</div>` : ''}</td>
