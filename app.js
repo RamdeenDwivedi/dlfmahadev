@@ -161,14 +161,15 @@ function defaults() {
     donations: SEED_DONATIONS.map(d => ({ ...d })), pledges: SEED_PLEDGES.map(p => ({ ...p })), volunteers: [], drives: [], polls: defaultPolls(),
     weekPlans: {}, dayProofs: [], presentation: { photos: [], videoFileId: null },
     sevas: DEFAULT_SEVAS.map(s => ({ ...s, bookings: [] })), idols: DEFAULT_IDOLS.map(x => ({ ...x })),
-    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 6 },
+    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 7 },
   };
 }
 // Real figures from the fundraising deck / all-in-one brief: ₹10.50 L achieved incl. the first 3 days (₹42,306).
 const REAL_SETTINGS = {
   society: 'DLF Woodland Heights', temple: 'Narmadeshwar Mahadev Temple', target: 3000000, opening: 1050000 - 42306,
   deadline: '2026-12-15', minDonation: 5101, homes: 984, foundationPct: 100, builtPct: 28, towers: LETTER_TOWERS,
-  upi: 'Vyapar.168003185609@hdfcbank', address: 'Temple site beside Towers L–T, DLF Woodland Heights, Bommasandra–Jigani Link Rd, Bengaluru',
+  upi: 'Vyapar.169022715523@hdfcbank', upiQr: 'upi://pay?pa=Vyapar.169022715523@hdfcbank&pn=Default&mc=8999&tr=STQU169022715523&cu=INR',
+  auditName: 'Mr. Ram', auditPhone: '9008225906', address: 'Temple site beside Towers L–T, DLF Woodland Heights, Bommasandra–Jigani Link Rd, Bengaluru',
   mapQuery: 'DLF Woodland Heights, Jigani, Bengaluru', reminderTpl: DEFAULT_REMINDER, thanksTpl: DEFAULT_THANKS,
 };
 /* One-time upgrade of data saved by the first version of the app. */
@@ -229,12 +230,20 @@ function migrate6(s) {
   s.meta = { version: 6 };
   return s;
 }
+/* v7: temple UPI moved to the HDFC SmartHub QR account. */
+function migrate7(s) {
+  if ((s.meta?.version || 1) >= 7) return s;
+  const st = s.settings ||= {};
+  if (!st.upi || st.upi === 'Vyapar.168003185609@hdfcbank') { st.upi = REAL_SETTINGS.upi; st.upiQr = REAL_SETTINGS.upiQr; }
+  s.meta = { version: 7 };
+  return s;
+}
 
 /* ---------- persistence ---------- */
 const KEY = 'templeFundDrive.v1';
 function merge(o) {
   const d = defaults();
-  const o2 = migrate6(migrate5(migrate4(migrate3(migrate({ ...o, settings: { ...(o.settings || {}) }, donations: o.donations || [], pledges: o.pledges || [], volunteers: o.volunteers || [], drives: o.drives || [] })))));
+  const o2 = migrate7(migrate6(migrate5(migrate4(migrate3(migrate({ ...o, settings: { ...(o.settings || {}) }, donations: o.donations || [], pledges: o.pledges || [], volunteers: o.volunteers || [], drives: o.drives || [] }))))));
   return { ...d, ...o2, settings: { ...d.settings, ...o2.settings }, presentation: { ...d.presentation, ...(o2.presentation || {}) } };
 }
 function load() {
@@ -473,6 +482,7 @@ RENDER.dashboard = () => {
   else callout = `<div class="callout warn">⚠ At the last-7-day pace (${inr(avg7)}/day) we would reach <b>${lakh(projected)}</b> by ${fmtD(st.deadline)} — short by <b>${lakh(st.target - projected)}</b>. We need <b>${inr(T.perDay)}/day</b> from now.</div>`;
 
   return `
+  ${donateCard()}
   <section class="card">
     <div class="hero-top">
       <div><div class="eyebrow">Achieved so far</div><div class="big">${lakh(T.achieved)} <span class="of">of ${lakh(st.target)}</span></div></div>
@@ -608,6 +618,80 @@ function todaysDrive() {
     <div class="small muted">Target ${inr(d.target)} · Collected so far ${inr(driveCollected(d))}</div></div>`).join('<hr style="border:0;border-top:1px solid var(--border)">');
 }
 
+/* ---------- Donate (residents) ---------- */
+const fmtPhone = p => { const d = String(p || '').replace(/\D/g, '').slice(-10); return d.length === 10 ? `${d.slice(0, 5)} ${d.slice(5)}` : p; };
+function upiLink() { const st = S.settings; return st.upiQr || (st.upi ? `upi://pay?pa=${encodeURIComponent(st.upi)}&pn=${encodeURIComponent(st.temple)}&cu=INR` : ''); }
+function donateCard() {
+  const st = S.settings, qrOk = st.upi === REAL_SETTINGS.upi;
+  return `<section class="card donate" id="donate">
+    <div class="donate-grid">
+      <div class="qr-box">
+        ${qrOk ? `<img src="assets/upi-qr.png" alt="UPI QR code for ${esc(st.upi)}" width="200" height="200">` : ''}
+        <div class="upi-id"><span>${esc(st.upi)}</span> <button class="btn sm" data-act="copyUpi">Copy</button></div>
+        <div class="small muted">HDFC Bank · GPay · PhonePe · Paytm · Cards</div>
+      </div>
+      <div class="donate-body">
+        <div class="eyebrow">Donate to ${esc(st.temple)}</div>
+        <h2>Scan · Pay · Send us your receipt 🙏</h2>
+        <ol class="steps">
+          <li>Scan the QR with any UPI app and give from <b>${inr(st.minDonation)}</b>, or any amount your heart feels. Every offering is a seva.</li>
+          <li>Take a <b>screenshot</b> of the successful payment.</li>
+          <li>Tap <b>Submit my donation</b>. Enter your name, flat, owner or tenant, and upload the screenshot.</li>
+          <li>Send the receipt on WhatsApp to <b>${esc(st.auditName)} · ${esc(fmtPhone(st.auditPhone))}</b> for audit. Your thank-you receipt follows.</li>
+        </ol>
+        <div class="row-actions">
+          <a class="btn mobile-only" href="${esc(upiLink())}">📱 Pay with UPI app</a>
+          <button class="btn primary" data-act="selfDonate">🧾 Submit my donation</button>
+          <button class="btn wa" data-act="shareAudit">💬 WhatsApp ${esc(st.auditName)}</button>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+function selfDonateForm() {
+  resetPending([]);
+  const st = S.settings;
+  openModal(`<form class="form" data-form="selfDonate">
+    <h3>🧾 Submit my donation</h3>
+    <p class="hint">Paid by UPI? Fill this in and attach the payment screenshot. Your details go only to the temple committee, for receipts and audit.</p>
+    <div class="grid2">
+      <label class="span2">Your name<input name="donor" required autocomplete="name" placeholder="e.g. Ishita Das"></label>
+      <label>Tower<select name="tower" required><option value="">Choose…</option>${towerOpts('', false)}</select></label>
+      <label>Flat no.<input name="flat" required inputmode="numeric" placeholder="e.g. 082"></label>
+      <fieldset class="span2"><legend>I am the</legend>${radios('occupancy', ['Owner', 'Tenant'], '')}</fieldset>
+      <label>Mobile (WhatsApp)<input name="phone" type="tel" inputmode="tel" required autocomplete="tel" placeholder="10-digit number"></label>
+      <label>Amount paid (₹)<input name="amount" type="number" min="1" step="1" required inputmode="numeric" placeholder="${st.minDonation}"></label>
+    </div>
+    <div class="chips">${TIERS.slice(0, 8).map(t => `<button type="button" class="chip" data-act="setAmt" data-v="${t}">${inr(t)}</button>`).join('')}</div>
+    <fieldset><legend>Paid by</legend>${radios('mode', ['UPI', 'Bank Transfer', 'Cash to volunteer'], 'UPI')}
+      <label>UPI transaction / UTR no. <span class="muted small">(optional, from the screenshot)</span><input name="ref" inputmode="numeric" autocomplete="off"></label></fieldset>
+    ${dropzone('Upload payment screenshot')}
+    <div class="actions"><button type="button" class="btn ghost" data-act="closeModal">Cancel</button><button class="btn primary">Submit 🙏</button></div></form>`);
+}
+function auditMsg(r) {
+  const st = S.settings;
+  return [`🧾 *Temple donation — receipt for audit*`, `${st.temple}`, ``,
+    `Name: *${r.donor}*`, `Flat: ${r.tower} · ${r.flat} (${r.occupancy})`, `Mobile: ${r.phone}`,
+    `Amount: *${inr(r.amount)}* · ${r.mode}`, r.ref ? `UPI / UTR ref: ${r.ref}` : null, `Date: ${fmtD(r.date)}`, ``,
+    r.mode === 'Cash to volunteer' ? `Cash handed to a temple volunteer.` : `📎 Payment screenshot attached.`, `Har Har Mahadev 🙏`].filter(l => l !== null).join('\n');
+}
+function thanksScreen(r) {
+  const st = S.settings, canFile = !!(UI.lastShare && navigator.canShare && navigator.canShare({ files: UI.lastShare }));
+  openModal(`<div class="form thanks">
+    <div class="thanks-om">🔱</div>
+    <h3>Thank you, ${esc(r.donor)} ji! 🙏</h3>
+    <p>Your offering of <b>${inr(r.amount)}</b> is a seva towards bringing <b>Narmadeshwar Mahadev</b> home to ${esc(st.society)}. May Mahadev bless your family.</p>
+    <div class="callout info"><b>One last step, for audit:</b> send this receipt to <b>${esc(st.auditName)} (${esc(fmtPhone(st.auditPhone))})</b> on WhatsApp.
+      ${canFile ? 'Tap <b>Share receipt</b>, choose <b>WhatsApp</b>, then pick ' + esc(st.auditName) + '.' : 'WhatsApp opens with your details filled in. Tap 📎 and attach your payment screenshot before sending.'}</div>
+    <div class="row-actions" style="justify-content:center;flex-wrap:wrap">
+      ${canFile ? `<button class="btn primary" data-act="shareReceiptFile">📤 Share receipt + screenshot</button>` : ''}
+      <button class="btn ${canFile ? '' : 'primary'} wa" data-act="sendAudit">💬 WhatsApp ${esc(st.auditName)}</button>
+      <button class="btn" data-act="shareFilm">🎬 Share temple film with neighbours</button>
+    </div>
+    <p class="small muted" style="margin-top:12px">Saved on this phone · ${fmtD(r.date)} · ${esc(r.tower)} ${esc(r.flat)}</p>
+    <div class="actions"><button type="button" class="btn ghost" data-act="closeModal">Done</button></div></div>`);
+}
+
 /* ---------- Collections ---------- */
 RENDER.collections = () => {
   const f = UI.col;
@@ -619,6 +703,7 @@ RENDER.collections = () => {
     <button class="btn ghost" data-act="exportCSV">⬇ Export CSV</button>
   </div>
   <section class="card"><div class="card-h"><h2>Day-wise summary</h2><span class="muted small">Tap a day to filter the list</span></div>${daySummary()}</section>
+  ${subsSection()}
   <section class="card" id="cash"><div class="card-h"><h2>💵 Cash collection</h2><span class="muted small">Kept separate from UPI until it reaches the temple account</span></div>${cashSection()}</section>
   <section class="card">
     <div class="card-h"><h2>All collections</h2></div>
@@ -637,6 +722,14 @@ RENDER.collections = () => {
     ${proofGallery()}
   </section>`;
 };
+function subsSection() {
+  const list = (S.submissions || []).filter(x => !x.addedId);
+  if (!list.length) return '';
+  return `<section class="card"><div class="card-h"><h2>📲 Resident submissions on this phone</h2><span class="muted small">Check against the bank statement, then add to collections</span></div>
+  <div class="rem-list">${list.map(x => `<div class="rem"><div><div class="who">${esc(x.donor)} · ${inr(x.amount)}</div>
+    <div class="meta">${fmtD(x.date)} · ${esc(x.tower)} ${esc(x.flat)} (${esc(x.occupancy || '—')}) · ${esc(x.mode)}${x.ref ? ' · ref ' + esc(x.ref) : ''} · ${esc(x.phone)}</div>${thumbs(x.receiptIds)}</div>
+    <div class="row-actions"><button class="btn sm primary" data-act="acceptSub" data-id="${x.id}">✅ Add to collections</button><button class="btn sm icon danger" data-act="delSub" data-id="${x.id}" title="Delete">🗑</button></div></div>`).join('')}</div></section>`;
+}
 function cashStats() {
   const cash = S.donations.filter(d => d.mode === 'Cash');
   const held = cash.filter(d => !d.depositedOn);
@@ -1152,7 +1245,8 @@ function donationForm(d = {}) {
       <label>Amount received (₹)<input type="number" name="amount" min="1" step="1" required inputmode="numeric" value="${esc(d.amount || '')}" placeholder="${st.minDonation}"></label>
       <label class="span2">Donor name<input name="donor" required value="${esc(d.donor || '')}" autocomplete="off"></label>
       <label>Tower<select name="tower" required>${towerOpts(d.tower)}</select></label>
-      <label>Flat no.<input name="flat" required value="${esc(d.flat || '')}" placeholder="e.g. 1204"></label>
+      <label>Flat no.<input name="flat" required value="${esc(d.flat || '')}" placeholder="e.g. 082"></label>
+      <fieldset class="span2"><legend>Resident</legend>${radios('occupancy', ['Owner', 'Tenant'], d.occupancy || '')}</fieldset>
       <label>Phone (WhatsApp)<input name="phone" type="tel" inputmode="tel" value="${esc(d.phone || '')}"></label>
       <label>Collected by<input name="collectedBy" list="vol-list" value="${esc(d.collectedBy || '')}" placeholder="Volunteer name"></label>
     </div>
@@ -1250,6 +1344,21 @@ function voteForm(p) {
 }
 
 const FORMS = {
+  async selfDonate(fd) {
+    const amount = Math.round(+fd.amount);
+    if (!(amount > 0)) return toast('Enter the amount you paid');
+    if (!fd.occupancy) return toast('Please choose Owner or Tenant');
+    if (String(fd.phone).replace(/\D/g, '').length < 10) return toast('Enter your 10-digit mobile number');
+    if (fd.mode !== 'Cash to volunteer' && !pending.files.length) return toast('Please upload the payment screenshot 📎');
+    const files = [...pending.files];
+    const ids = await storeFiles(files);
+    const rec = { id: uid(), created: Date.now(), date: today(), donor: fd.donor.trim(), tower: fd.tower, flat: fd.flat.trim(), occupancy: fd.occupancy,
+      phone: fd.phone.trim(), amount, mode: fd.mode, ref: (fd.ref || '').trim(), receiptIds: ids };
+    (S.submissions ||= []).push(rec); save();
+    UI.lastSub = rec;
+    UI.lastShare = files.filter(f => f.type.startsWith('image/') || f.type === 'application/pdf').map((f, i) => f instanceof File ? f : new File([f], `receipt-${i + 1}.jpg`, { type: f.type || 'image/jpeg' }));
+    thanksScreen(rec);
+  },
   async donation(fd) {
     const amount = Math.round(+fd.amount);
     if (!(amount > 0)) return toast('Enter the amount received');
@@ -1262,7 +1371,7 @@ const FORMS = {
       status: fd.status || 'Full', mode: fd.mode || 'UPI', ref: fd.ref.trim(), collectedBy: fd.collectedBy.trim(), notes: fd.notes.trim(),
       committed: fd.status === 'Part' ? Math.round(+fd.committed || 0) : 0, reminderDate: fd.reminderDate || '',
       receiptIds: [...(d ? pending.keep : []), ...newIds],
-      cashWith: fd.mode === 'Cash' ? (fd.cashWith || '').trim() || fd.collectedBy.trim() : '', depositedOn: fd.mode === 'Cash' ? fd.depositedOn || '' : '',
+      occupancy: fd.occupancy || '', cashWith: fd.mode === 'Cash' ? (fd.cashWith || '').trim() || fd.collectedBy.trim() : '', depositedOn: fd.mode === 'Cash' ? fd.depositedOn || '' : '',
     };
     if (d) Object.assign(d, rec); else { d = { id: uid(), created: Date.now(), ...rec }; S.donations.push(d); }
     let msg = 'Collection saved 🙏';
@@ -1589,13 +1698,31 @@ const ACTIONS = {
     const lines = days.map(d => { const ds = S.donations.filter(x => x.date === d); return ds.length ? `${fmtWD(d)}: ${inr(sum(ds.map(x => x.amount)))} (${ds.length} entr${ds.length === 1 ? 'y' : 'ies'})` : null; }).filter(Boolean);
     openWA('', `📒 *Weekly ledger — ${S.settings.temple}*\nWeek of ${fmtD(ws)}\n\n${lines.join('\n') || 'No collections recorded yet this week.'}\n\n*This week:* ${inr(sumRange(ws, t))}\n*Total achieved:* ${lakh(T.achieved)} of ${lakh(S.settings.target)} (${T.pct.toFixed(1)}%)\n*Pledged, still due:* ${inr(T.pledgedPending)}\n*Remaining:* ${lakh(T.remaining)} · ${T.daysLeft} days to Prana Pratishtha\n\nEvery rupee receipted 🙏 Har Har Mahadev`);
   },
+  selfDonate: () => selfDonateForm(),
+  acceptSub: ds => {
+    const x = S.submissions.find(v => v.id === ds.id); if (!x) return;
+    const d = { id: uid(), created: Date.now(), date: x.date, donor: x.donor, phone: x.phone, tower: x.tower, flat: x.flat, occupancy: x.occupancy, amount: x.amount,
+      status: 'Full', mode: x.mode === 'Cash to volunteer' ? 'Cash' : x.mode, ref: x.ref, collectedBy: 'Self (resident form)', notes: 'Submitted by resident', receiptIds: [...x.receiptIds], committed: 0 };
+    S.donations.push(d); x.addedId = d.id; save(); render(); toast(`${x.donor} added to collections 🙏`);
+  },
+  delSub: ds => { if (!confirm('Delete this submission?')) return; const x = S.submissions.find(v => v.id === ds.id); delFiles(x.receiptIds); S.submissions = S.submissions.filter(v => v.id !== ds.id); save(); render(); },
+  shareAudit: () => {
+    const st = S.settings;
+    openWA(st.auditPhone, `🧾 *Temple donation — receipt for audit*\n${st.temple}\n\nName: \nTower & flat: \nOwner / Tenant: \nAmount: ₹\nUPI / UTR ref: \n\n📎 Payment screenshot attached.\nHar Har Mahadev 🙏`);
+  },
+  sendAudit: () => { const r = UI.lastSub; if (r) openWA(S.settings.auditPhone, auditMsg(r)); },
+  shareReceiptFile: async () => {
+    const r = UI.lastSub; if (!r) return;
+    try { await navigator.share({ files: UI.lastShare, text: auditMsg(r) }); }
+    catch (e) { if (e.name !== 'AbortError') { toast('Sharing not available — opening WhatsApp instead'); openWA(S.settings.auditPhone, auditMsg(r)); } }
+  },
   depositCash: ds => {
     const list = cashStats().byHolder[ds.who] || [];
     if (!list.length || !confirm(`Mark ${inr(sum(list.map(d => d.amount)))} cash held by ${ds.who} as deposited to the temple account today?`)) return;
     list.forEach(d => d.depositedOn = today()); save(); render(); toast('Cash marked as deposited ✅');
   },
   exportCSV: () => {
-    const cols = ['date', 'donor', 'phone', 'tower', 'flat', 'amount', 'status', 'committed', 'mode', 'ref', 'collectedBy', 'cashWith', 'depositedOn', 'notes'];
+    const cols = ['date', 'donor', 'phone', 'tower', 'flat', 'amount', 'status', 'committed', 'occupancy', 'mode', 'ref', 'collectedBy', 'cashWith', 'depositedOn', 'notes'];
     const rows = [...S.donations].sort((a, b) => a.date.localeCompare(b.date)).map(d => cols.map(c => d[c] ?? '').concat((d.receiptIds || []).length));
     download(`collections-${today()}.csv`, toCSV([[...cols, 'receipts'], ...rows]), 'text/csv');
   },

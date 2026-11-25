@@ -373,3 +373,19 @@ dialog::backdrop { background: rgba(20, 12, 4, .55); }
 .offer-list { display: grid; gap: 6px; }
 .offer-list > div { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; background: var(--surface-2); border-radius: 8px; font-size: .9rem; }
 .offer-list b { color: var(--accent-strong); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- Donate card (residents) ---------- */
+.donate { border: 2px solid var(--gold); background: linear-gradient(135deg, var(--surface), color-mix(in srgb, var(--gold) 10%, var(--surface))); }
+.donate-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center; }
+.qr-box { text-align: center; display: grid; gap: 6px; justify-items: center; }
+.qr-box img { width: 200px; height: 200px; border-radius: 10px; background: #fff; padding: 6px; border: 1px solid var(--border); image-rendering: pixelated; }
+.upi-id { font-weight: 700; font-size: .9rem; word-break: break-all; display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.donate-body h2 { margin: 2px 0 8px; }
+.steps { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 4px; }
+.donate .row-actions { flex-wrap: wrap; }
+.mobile-only { display: none; }
+@media (hover: none) and (pointer: coarse) { .mobile-only { display: inline-flex; } }
+@media (max-width: 640px) { .donate-grid { grid-template-columns: minmax(0, 1fr); } .qr-box img { width: 220px; height: 220px; } }
+.thanks { text-align: center; }
+.thanks-om { font-size: 2.6rem; line-height: 1; }
+.thanks .callout { text-align: left; margin: 12px 0; }
