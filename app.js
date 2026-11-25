@@ -503,6 +503,7 @@ RENDER.dashboard = () => {
   else callout = `<div class="callout warn">⚠ At the last-7-day pace (${inr(avg7)}/day) we would reach <b>${lakh(projected)}</b> by ${fmtD(st.deadline)} — short by <b>${lakh(st.target - projected)}</b>. We need <b>${inr(T.perDay)}/day</b> from now.</div>`;
 
   return `
+  ${driveAlert()}
   ${donateCard()}
   <section class="card">
     <div class="hero-top">
@@ -711,6 +712,66 @@ function ledgerList() {
       <td class="r" data-label="Amount">${x.amount ? inr(x.amount) : '—'}${x.verify ? '<div class="small muted">to verify</div>' : ''}</td>
       <td data-label="Status"><span class="badge ${ST_CLS(x.status)}">${esc(x.status)}</span></td><td data-label="Mode">${esc(x.mode || '—')}</td></tr>`), sum(L.map(x => x.paid)));
 }
+
+/* ---------- Volunteer reminders: 30 minutes before each drive ---------- */
+const REMIND_MIN = 30;
+function driveStart(d) {
+  // "7:00 PM – 9:00 PM", "7 PM", "19:00", "6.30pm" → Date of the start time (default 7 PM)
+  const m = String(d.time || '').match(/(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?/i);
+  let h = 19, mi = 0;
+  if (m) { h = +m[1]; mi = +(m[2] || 0); const ap = (m[3] || '').toLowerCase(); if (ap === 'pm' && h < 12) h += 12; if (ap === 'am' && h === 12) h = 0; if (!ap && h < 9) h += 12; }
+  const dt = parseD(d.date); dt.setHours(h, mi, 0, 0); return dt;
+}
+const hm = dt => dt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+function remindMsg(d) {
+  const st = S.settings, start = driveStart(d), vols = (d.volunteerIds || []).map(volName).filter(Boolean);
+  const left = Math.round((start - new Date()) / 60000), inTxt = left > 0 && left <= 90 ? `in ${left} minutes` : d.date === today() ? 'today' : 'on ' + fmtWD(d.date);
+  return [`🔔 *Reminder: Temple seva drive ${inTxt}* 🙏`, ``,
+    `⏰ Starts *${hm(start)}*${d.date === today() ? ' today' : ', ' + fmtWD(d.date)}${d.meet ? ` · 📍 Meet at *${d.meet}*` : ''}`,
+    `🏢 ${(d.towers || []).join(' & ') || 'Towers to be decided'}`,
+    vols.length ? `🙋 Team: ${vols.join(', ')}` : null,
+    ``, `Please bring: receipt book & pen · temple QR card · phone charged (film & photos ready)`,
+    `Running late or can't come? Reply here so we can adjust. Har Har Mahadev 🔱`].filter(l => l !== null).join('\n');
+}
+function driveAlert() {
+  const now = new Date();
+  const soon = S.drives.filter(d => d.status !== 'Done' && d.date === today()).map(d => ({ d, start: driveStart(d) }))
+    .filter(x => x.start - now <= 90 * 60000 && x.start - now > -60 * 60000).sort((a, b) => a.start - b.start)[0];
+  if (!soon) return '';
+  const mins = Math.round((soon.start - now) / 60000);
+  const when = mins > 0 ? `starts in <b>${mins} min</b> (${hm(soon.start)})` : 'has started';
+  return `<div class="callout ${mins <= REMIND_MIN ? 'warn' : 'info'}" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span>🔔 Today's drive ${when}${soon.d.meet ? ` · meet at <b>${esc(soon.d.meet)}</b>` : ''}. ${mins > REMIND_MIN ? `Remind the team at ${hm(new Date(soon.start - REMIND_MIN * 60000))}.` : 'Send the team reminder now.'}</span>
+    <button class="btn sm wa" data-act="remindDrive" data-id="${soon.d.id}">💬 Send reminder</button>
+    ${'Notification' in window && Notification.permission === 'default' ? '<button class="btn sm" data-act="enableAlerts">Turn on phone alerts</button>' : ''}</div>`;
+}
+function icsFor(list) {
+  const pad = n => String(n).padStart(2, '0'), f = dt => `${dt.getUTCFullYear()}${pad(dt.getUTCMonth() + 1)}${pad(dt.getUTCDate())}T${pad(dt.getUTCHours())}${pad(dt.getUTCMinutes())}00Z`;
+  const escI = t => String(t).replace(/([,;\\])/g, '\\$1').replace(/\n/g, '\\n');
+  const ev = list.map(d => { const a = driveStart(d), b = new Date(a.getTime() + 2 * 3600000);
+    return ['BEGIN:VEVENT', `UID:${d.id}@mahadev-seva-drive`, `DTSTAMP:${f(new Date())}`, `DTSTART:${f(a)}`, `DTEND:${f(b)}`,
+      `SUMMARY:${escI('🔱 Temple seva drive' + (d.towers?.length ? ' · ' + d.towers.join(' & ') : ''))}`,
+      `LOCATION:${escI((d.meet ? d.meet + ', ' : '') + S.settings.society)}`,
+      `DESCRIPTION:${escI('Bring receipt book, QR card and charged phone. ' + (siteLink() || ''))}`,
+      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escI('Temple drive in 30 minutes' + (d.meet ? ' · meet at ' + d.meet : ''))}`, `TRIGGER:-PT${REMIND_MIN}M`, 'END:VALARM', 'END:VEVENT'].join('\r\n'); });
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Mahadev Seva Drive//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', ...ev, 'END:VCALENDAR'].join('\r\n');
+}
+// Phone notification 30 min before, while the site is open on this phone
+const notified = new Set(); let lastAlert = null;
+setInterval(() => {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const now = Date.now();
+  S.drives.filter(d => d.status !== 'Done' && d.date === today()).forEach(d => {
+    const lead = driveStart(d) - now;
+    if (lead <= REMIND_MIN * 60000 && lead > 0 && !notified.has(d.id)) {
+      notified.add(d.id);
+      try { new Notification('🔔 Temple drive in ' + Math.round(lead / 60000) + ' min', { body: (d.meet ? 'Meet at ' + d.meet + '. ' : '') + 'Tap to send the team reminder.', tag: 'drive-' + d.id }).onclick = () => { window.focus(); ACTIONS.remindDrive({ id: d.id }); }; } catch {}
+    }
+  });
+  if ((tab === 'dashboard' || tab === 'volunteers') && !document.querySelector('dialog[open]') && !document.activeElement?.matches('input,textarea,select')) {
+    const html = driveAlert(); if (html !== lastAlert) { lastAlert = html; render(); }
+  }
+}, 60000);
 
 /* ---------- Door-to-door status per flat (assets/visits.json + receipt book) ---------- */
 const VS = { data: null, loading: false, tower: 'L' };
@@ -1088,6 +1149,7 @@ function driveCard(d) {
       </div>
       <div class="row-actions" style="justify-content:flex-start">
         <button class="btn sm wa" data-act="shareDrive" data-id="${d.id}">💬 Share & ask to join</button>
+        ${d.status !== 'Done' && d.date >= t ? `<button class="btn sm wa" data-act="remindDrive" data-id="${d.id}">🔔 30-min reminder</button><button class="btn sm" data-act="icsDrive" data-id="${d.id}">📅 Add to calendar</button>` : ''}
         ${d.status !== 'Done' ? `<button class="btn sm" data-act="driveDone" data-id="${d.id}">✓ Mark done</button>` : ''}
         <button class="btn sm icon" data-act="editDrive" data-id="${d.id}">✏️</button>
         <button class="btn sm icon danger" data-act="delDrive" data-id="${d.id}">🗑</button>
@@ -1103,7 +1165,8 @@ RENDER.volunteers = () => {
   const short = upcoming.filter(d => (d.volunteerIds || []).length < (+S.settings.minVols || 0)).length;
   const collectedBy = n => sum(S.donations.filter(d => (d.collectedBy || '').trim().toLowerCase() === n.trim().toLowerCase()).map(d => d.amount));
   return `
-  <div class="toolbar"><button class="btn primary" data-act="addDrive">+ Plan a drive</button><button class="btn" data-act="addVolunteer">+ Add volunteer</button></div>
+  <div class="toolbar"><button class="btn primary" data-act="addDrive">+ Plan a drive</button><button class="btn" data-act="addVolunteer">+ Add volunteer</button><button class="btn" data-act="icsAll">📅 All drives to calendar</button></div>
+  ${driveAlert()}
   ${doorStatus()}
   <section class="kpis">
     ${kpi('Volunteers', S.volunteers.length, `${availToday.length + inToday.size} available today`)}
@@ -1839,6 +1902,10 @@ const ACTIONS = {
     openWA('', `📒 *Weekly ledger — ${S.settings.temple}*\nWeek of ${fmtD(ws)}\n\n${lines.join('\n') || 'No collections recorded yet this week.'}\n\n*This week:* ${inr(sumRange(ws, t))}\n*Total achieved:* ${lakh(T.achieved)} of ${lakh(S.settings.target)} (${T.pct.toFixed(1)}%)\n*Pledged, still due:* ${inr(T.pledgedPending)}\n*Remaining:* ${lakh(T.remaining)} · ${T.daysLeft} days to Prana Pratishtha\n\nEvery rupee receipted 🙏 Har Har Mahadev`);
   },
   selfDonate: () => selfDonateForm(),
+  remindDrive: ds => { const d = S.drives.find(x => x.id === ds.id); if (d) openWA('', remindMsg(d)); },
+  icsDrive: ds => { const d = S.drives.find(x => x.id === ds.id); if (d) { download(`temple-drive-${d.date}.ics`, icsFor([d]), 'text/calendar'); toast('Open the file to add it: your phone will alert 30 min before'); } },
+  icsAll: () => { const L = S.drives.filter(d => d.status !== 'Done' && d.date >= today()); if (!L.length) return toast('No upcoming drives'); download('temple-drives.ics', icsFor(L), 'text/calendar'); toast(`${L.length} drives: each alerts 30 min before`); },
+  enableAlerts: async () => { try { const p = await Notification.requestPermission(); toast(p === 'granted' ? 'Alerts on: this phone will notify 30 min before each drive (while the site is open)' : 'Alerts not allowed'); render(); } catch { toast('This browser does not support alerts'); } },
   shareAudio: async () => {
     const a = AUDIO[UI.lang] || AUDIO.en, name = `Temple-visit-script-${UI.lang === 'hi' ? 'Hindi' : 'English'}.m4a`;
     try {
