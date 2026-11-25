@@ -36,8 +36,12 @@ function toast(msg) {
 }
 function openWA(phone, msg) {
   const p = normPhone(phone);
-  const url = (p ? `https://wa.me/${p}` : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
+  // api.whatsapp.com keeps emoji intact; the wa.me redirect can turn them into "�" on WhatsApp Desktop / some phones
+  const url = 'https://api.whatsapp.com/send?' + (p ? `phone=${p}&` : '') + 'text=' + encodeURIComponent(msg);
   window.open(url, '_blank', 'noopener');
+}
+function siteLink() {
+  return /^https?:$/.test(location.protocol) && !/^(localhost|127\.)/.test(location.hostname) ? location.origin + location.pathname : '';
 }
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); toast('Copied to clipboard'); }
@@ -1439,7 +1443,25 @@ const ACTIONS = {
   unjoin: ds => { const d = S.drives.find(x => x.id === ds.drive); d.volunteerIds = d.volunteerIds.filter(id => id !== ds.vol); save(); render(); },
   shareDrive: ds => {
     const d = S.drives.find(x => x.id === ds.id), T = totals(), need = Math.max(0, S.settings.minVols - (d.volunteerIds || []).length);
-    openWA('', `🛕 *Temple Collection Drive* — ${fmtWD(d.date)}\n⏰ ${d.time}${d.meet ? `\n📍 Meet at: ${d.meet}` : ''}\n🏢 Towers: ${(d.towers || []).join(', ') || 'TBD'}\n🎯 Target: ${inr(d.target)}\n🙋 Volunteers: ${(d.volunteerIds || []).map(volName).filter(Boolean).join(', ') || 'none yet'}${need ? `\n👉 Need ${need} more — reply to join!` : ''}\n\nProgress: ${lakh(T.achieved)} of ${lakh(S.settings.target)} (${T.pct.toFixed(1)}%) · ${T.daysLeft} days left 🙏`);
+    const st = S.settings, vols = (d.volunteerIds || []).map(volName).filter(Boolean), towers = d.towers || [];
+    const lines = [
+      `🔱 *Har Har Mahadev* 🙏`,
+      `*${st.temple} — Seva Drive*`,
+      ``,
+      `📅 *${fmtWD(d.date)}*${d.time ? ` · ${d.time}` : ''}`,
+      d.meet ? `📍 Meet at: *${d.meet}*` : null,
+      `🏢 Visiting: ${towers.length ? towers.join(' & ').replace(/ & (?=.* & )/g, ', ') : 'towers to be decided'}`,
+      d.target ? `🎯 Goal for the evening: ${inr(d.target)}` : null,
+      ``,
+      vols.length ? `🙋 Joining: ${vols.join(', ')}` : null,
+      need ? `👉 *We need ${need} more volunteer${need > 1 ? 's' : ''}.* Reply *"I'm in"* to join — even one hour helps.` : `✅ Team is complete — thank you! More hands are always welcome.`,
+      ``,
+      `📊 So far: *${lakh(T.achieved)}* of ${lakh(st.target)} (${T.pct.toFixed(0)}%) · ${T.daysLeft} days to ${fmtD(st.deadline)}`,
+      siteLink() ? `🎬 Temple film & details: ${siteLink()}` : null,
+      ``,
+      `Tan · Man · Dhan — every seva counts 🙏`,
+    ];
+    openWA('', lines.filter(l => l !== null).join('\n').trim());
   },
 
   addPoll: () => pollForm(),
