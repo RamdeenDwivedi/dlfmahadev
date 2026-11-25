@@ -131,7 +131,7 @@ const SEED_DONATIONS = [
   ['seed-d3', '2026-11-23', 'Day 3 drive — consolidated', 24206, '9 flats'],
 ].map(([id, date, donor, amount, n]) => ({ id, created: 1, households: parseInt(n) || 0, date, donor, phone: '', tower: 'Tower A & B', flat: n || '—', amount, status: 'Full', mode: 'UPI', ref: '', collectedBy: 'Seva team', notes: 'Consolidated day total from the drive update — replace with per-flat entries', receiptIds: [], consolidated: true }));
 const SEED_PLEDGES = [{ id: 'seed-p1', created: 1, donor: 'Drive pledges — consolidated', phone: '', tower: 'Tower A & B', flat: '—', amount: 115001, paid: 0, mode: 'UPI', dueDate: '2026-11-30', reminderDate: '2026-11-29', status: 'Pending', notes: '≈ ₹1,15,001 committed in Day 1–3 to pay by 30 Nov / salary day — split into individual pledges', consolidated: true }];
-const LETTER_TOWERS = Array.from({ length: 19 }, (_, i) => `Tower ${String.fromCharCode(65 + i)}`);
+const LETTER_TOWERS = [...'ABCDEFGHJKLMNOPQRSTUV'].map(c => `Tower ${c}`); // 21 towers, there is no Tower I
 
 function defaultPolls() {
   const mk = (question, audience, opts, reminderTpl) => ({
@@ -157,7 +157,7 @@ function defaults() {
     donations: SEED_DONATIONS.map(d => ({ ...d })), pledges: SEED_PLEDGES.map(p => ({ ...p })), volunteers: [], drives: [], polls: defaultPolls(),
     weekPlans: {}, dayProofs: [], presentation: { photos: [], videoFileId: null },
     sevas: DEFAULT_SEVAS.map(s => ({ ...s, bookings: [] })), idols: DEFAULT_IDOLS.map(x => ({ ...x })),
-    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 5 },
+    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 6 },
   };
 }
 // Real figures from the fundraising deck / all-in-one brief: ₹10.50 L achieved incl. the first 3 days (₹42,306).
@@ -215,12 +215,22 @@ function migrate5(s) {
   s.meta = { version: 5 };
   return s;
 }
+/* v6: real tower list A–V without I (was A–S). Keeps custom towers and any tower already used in records. */
+function migrate6(s) {
+  if ((s.meta?.version || 1) >= 6) return s;
+  const st = s.settings ||= {}, old = st.towers || [];
+  const used = new Set([...(s.donations || []), ...(s.pledges || []), ...(s.volunteers || [])].map(x => x.tower));
+  const extra = old.filter(t => !LETTER_TOWERS.includes(t) && (t !== 'Tower I' || used.has(t)));
+  if (old.length) st.towers = [...LETTER_TOWERS, ...extra];
+  s.meta = { version: 6 };
+  return s;
+}
 
 /* ---------- persistence ---------- */
 const KEY = 'templeFundDrive.v1';
 function merge(o) {
   const d = defaults();
-  const o2 = migrate5(migrate4(migrate3(migrate({ ...o, settings: { ...(o.settings || {}) }, donations: o.donations || [], pledges: o.pledges || [], volunteers: o.volunteers || [], drives: o.drives || [] }))));
+  const o2 = migrate6(migrate5(migrate4(migrate3(migrate({ ...o, settings: { ...(o.settings || {}) }, donations: o.donations || [], pledges: o.pledges || [], volunteers: o.volunteers || [], drives: o.drives || [] })))));
   return { ...d, ...o2, settings: { ...d.settings, ...o2.settings }, presentation: { ...d.presentation, ...(o2.presentation || {}) } };
 }
 function load() {
