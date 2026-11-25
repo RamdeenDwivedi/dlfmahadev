@@ -631,6 +631,22 @@ function todaysDrive() {
     <div class="small muted">Target ${inr(d.target)} · Collected so far ${inr(driveCollected(d))}</div></div>`).join('<hr style="border:0;border-top:1px solid var(--border)">');
 }
 
+/* Reload when a newer version is published (checked on open and when the tab comes back). */
+(function watchUpdates() {
+  if (!/^https?:$/.test(location.protocol)) return;
+  const mine = (document.querySelector('script[src*="app.js"]')?.getAttribute('src') || '').split('v=')[1];
+  if (!mine) return;
+  const check = async () => {
+    try {
+      const html = await (await fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' })).text();
+      const live = (html.match(/app\.js\?v=(\w+)/) || [])[1];
+      if (live && live !== mine) location.reload();
+    } catch {}
+  };
+  setTimeout(check, 3000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+})();
+
 /* ---------- Donate (residents) ---------- */
 const fmtPhone = p => { const d = String(p || '').replace(/\D/g, '').slice(-10); return d.length === 10 ? `${d.slice(0, 5)} ${d.slice(5)}` : p; };
 function upiLink() { const st = S.settings; return st.upiQr || (st.upi ? `upi://pay?pa=${encodeURIComponent(st.upi)}&pn=${encodeURIComponent(st.temple)}&cu=INR` : ''); }
