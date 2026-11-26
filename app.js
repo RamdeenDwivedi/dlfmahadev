@@ -464,7 +464,33 @@ const TABS = [
   ['script', '🛕 Visit Script & Presentation'], ['settings', '⚙️ Settings'],
 ];
 const RENDER = {};
-let tab = TABS.some(t => t[0] === location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard';
+
+/* ---------- Two views: Public (residents) and Admin (temple committee) ----------
+   Public is the default. Admin unlocks with the committee PIN and is remembered on that phone.
+   Static site: this hides admin screens, it is not a vault — never put phones or private notes in public files. */
+const ADMIN_KEY = 'templeFundDrive.admin';
+const ADMIN_HASH = 'e712ac105137800ee3a4fed3d1aa3b6a231fe11f0d8f1d42ce73fd4695295346'; // sha256('dlfmahadev:' + PIN)
+const PUBLIC_TABS = ['dashboard', 'film', 'ledger', 'seva'];
+const PUBLIC_ACTS = new Set(['goto', 'closeModal', 'copyUpi', 'shareFilm', 'setAmt', 'selfDonate', 'shareAudit', 'sendAudit', 'shareReceiptFile',
+  'rmPending', 'seek', 'shareSevas', 'adminLogin', 'adminLogout']);
+let ADMIN = (() => { try { return localStorage.getItem(ADMIN_KEY) === ADMIN_HASH; } catch { return false; } })();
+const isAdmin = () => ADMIN;
+const visibleTabs = () => ADMIN ? TABS : TABS.filter(t => PUBLIC_TABS.includes(t[0]));
+const tabOk = k => visibleTabs().some(t => t[0] === k);
+async function sha256(txt) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+function stripAdmin(root) {
+  if (ADMIN) return;
+  root.querySelectorAll('[data-act]').forEach(el => { const a = el.dataset.act; if (!PUBLIC_ACTS.has(a) || (a === 'goto' && !PUBLIC_TABS.includes(el.dataset.tab))) el.remove(); });
+  root.querySelectorAll('.admin-only, [data-join], [data-vstower]').forEach(el => el.remove());
+}
+function adminLoginForm() {
+  openModal(`<form class="form" data-form="adminLogin">
+    <h3>🔒 Temple committee login</h3>
+    <p class="hint">For committee members and volunteers who enter collections, pledges and drives. Residents don't need to log in.</p>
+    <label>Committee PIN<input name="pin" type="password" inputmode="numeric" autocomplete="off" required autofocus></label>
+    <div class="actions"><button type="button" class="btn ghost" data-act="closeModal">Cancel</button><button class="btn primary">Log in</button></div></form>`);
+}
+let tab = tabOk(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard';
 
 function renderHeader() {
   const st = S.settings, T = totals();
@@ -473,20 +499,27 @@ function renderHeader() {
   $('#top-progress').innerHTML = `<div><b>${lakh(T.achieved)}</b> of ${lakh(st.target)} · ${T.pct.toFixed(1)}% · <b>${T.daysLeft}</b> days left</div>
     <div class="pbar"><span class="seg-open" style="width:${pctOf(st.opening, st.target)}%"></span><span class="seg-col" style="width:${pctOf(T.collected, st.target)}%"></span></div>`;
   const due = duePledges().length;
-  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${l}${k === 'pledges' && due ? ` <span class="badge warn">${due}</span>` : ''}</button>`).join('');
+  $('#tabs').innerHTML = visibleTabs().map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${l}${k === 'pledges' && due ? ` <span class="badge warn">${due}</span>` : ''}</button>`).join('')
+    + (ADMIN ? `<button class="view-tag admin" data-act="adminLogout" title="Switch to the public view">🔓 Admin · Exit</button>` : '');
   $('#vol-list').innerHTML = S.volunteers.map(v => `<option value="${esc(v.name)}">`).join('');
   document.title = `${st.temple} Seva Drive`;
 }
 function render() {
+  if (!tabOk(tab)) tab = 'dashboard';
   renderHeader();
   const main = $('#main');
-  main.innerHTML = RENDER[tab]();
+  main.innerHTML = RENDER[tab]() + viewFooter();
+  stripAdmin(main);
   hydrate(main);
   tickTimers();
   const cs = $('.chart-scroll'), svg = cs && cs.querySelector('svg');
   if (svg) cs.scrollLeft = Math.max(0, +svg.dataset.todayX - cs.clientWidth * 0.6);
 }
-function go(t) { tab = t; history.replaceState(null, '', '#' + t); render(); window.scrollTo({ top: 0 }); }
+function viewFooter() {
+  return `<footer class="view-foot">${ADMIN ? `You are in the <b>admin view</b> on this phone. <button class="btn sm" data-act="adminLogout">Switch to public view</button>`
+    : `Har Har Mahadev 🙏 · Questions? WhatsApp ${esc(S.settings.auditName)} · ${esc(fmtPhone(S.settings.auditPhone))} · <button class="link small" data-act="adminLogin">Committee login</button>`}</footer>`;
+}
+function go(t) { if (!tabOk(t)) t = 'dashboard'; tab = t; history.replaceState(null, '', '#' + t); render(); window.scrollTo({ top: 0 }); }
 
 /* ---------- Dashboard ---------- */
 RENDER.dashboard = () => {
@@ -532,8 +565,8 @@ RENDER.dashboard = () => {
     ${kpi('This week', inr(weekAmt), `since ${fmtD(mondayOf(t))}`)}
     ${kpi('Homes contributed', `${households()}${st.homes ? `<span class="muted" style="font-size:.9rem"> / ${st.homes}</span>` : ''}`, st.homes ? `${pctOf(households(), st.homes).toFixed(1)}% of homes · avg ${inr(avg)}` : `avg ${inr(avg)}`)}
     ${kpi('Pledged, still due', inr(T.pledgedPending), `${T.pendingCount} pledge${T.pendingCount === 1 ? '' : 's'}`)}
-    ${(c => kpi('Cash collected', inr(c.total), c.inHand ? `${inr(c.inHand)} still in hand` : 'all deposited', c.inHand ? 'warn' : ''))(cashStats())}
-    ${kpi('Reminders due', due.length, 'today or overdue', due.length ? 'warn' : '')}
+    ${ADMIN ? (c => kpi('Cash collected', inr(c.total), c.inHand ? `${inr(c.inHand)} still in hand` : 'all deposited', c.inHand ? 'warn' : ''))(cashStats()) : ''}
+    ${ADMIN ? kpi('Reminders due', due.length, 'today or overdue', due.length ? 'warn' : '') : ''}
   </section>
 
   <section class="card">
@@ -553,8 +586,8 @@ RENDER.dashboard = () => {
     </section>
     <div class="stack">
       <section class="card"><h2>Payment mix</h2>${paymentMix()}</section>
-      <section class="card"><div class="card-h"><h2>Today's drive</h2><button class="btn sm" data-act="goto" data-tab="volunteers">All drives →</button></div>${todaysDrive()}</section>
-      <section class="card"><div class="card-h"><h2>Reminders due</h2><button class="btn sm" data-act="goto" data-tab="pledges">Open →</button></div>
+      <section class="card admin-only"><div class="card-h"><h2>Today's drive</h2><button class="btn sm" data-act="goto" data-tab="volunteers">All drives →</button></div>${todaysDrive()}</section>
+      <section class="card admin-only"><div class="card-h"><h2>Reminders due</h2><button class="btn sm" data-act="goto" data-tab="pledges">Open →</button></div>
         ${due.length ? `<div class="rem-list compact">${due.slice(0, 5).map(remCard).join('')}</div>` : empty('No reminders due today 🙏')}
       </section>
     </div>
@@ -734,6 +767,7 @@ function remindMsg(d) {
     `Running late or can't come? Reply here so we can adjust. Har Har Mahadev 🔱`].filter(l => l !== null).join('\n');
 }
 function driveAlert() {
+  if (!ADMIN) return '';
   const now = new Date();
   const soon = S.drives.filter(d => d.status !== 'Done' && d.date === today()).map(d => ({ d, start: driveStart(d) }))
     .filter(x => x.start - now <= 90 * 60000 && x.start - now > -60 * 60000).sort((a, b) => a.start - b.start)[0];
@@ -1101,7 +1135,7 @@ RENDER.seva = () => {
     ${kpi('Idols sponsored', `${(S.idols || []).filter(x => x.sponsor).length} / ${(S.idols || []).length}`, '')}
     ${kpi('Family seva from', inr(st.minDonation), 'any amount welcome')}
   </section>
-  <section class="card"><div class="card-h"><h2>Dedicate a part of Mahadev's home</h2><span class="muted small">Booking creates a pledge (or a collection if paid now) and frees up when cancelled</span></div>
+  <section class="card"><div class="card-h"><h2>Dedicate a part of Mahadev's home</h2><span class="muted small">${ADMIN ? 'Booking creates a pledge (or a collection if paid now) and frees up when cancelled' : 'To book a seva, WhatsApp ' + esc(st.auditName) + ' · ' + esc(fmtPhone(st.auditPhone))}</span></div>
     <div class="table-wrap"><table class="rtable"><thead><tr><th>Temple architectural seva</th><th class="r">Offering</th><th class="r">Slots</th><th>Sponsors</th><th></th></tr></thead><tbody>
     ${(S.sevas || []).map(x => {
       const left = x.slots - x.bookings.length;
@@ -1547,6 +1581,12 @@ function voteForm(p) {
 }
 
 const FORMS = {
+  adminLogin: async (v, form) => {
+    let h = ''; try { h = await sha256('dlfmahadev:' + String(v.pin || '').trim()); } catch { return toast('Login needs the https site link'); }
+    if (h !== ADMIN_HASH) { form.pin.value = ''; form.pin.focus(); return toast('Wrong PIN'); }
+    ADMIN = true; try { localStorage.setItem(ADMIN_KEY, h); } catch {}
+    closeModal(); render(); toast('Admin view on — remembered on this phone');
+  },
   async selfDonate(fd) {
     const amount = Math.round(+fd.amount);
     if (!(amount > 0)) return toast('Enter the amount you paid');
@@ -1693,6 +1733,8 @@ const findP = id => S.pledges.find(x => x.id === id);
 const findPoll = id => S.polls.find(x => x.id === id);
 const ACTIONS = {
   goto: ds => go(ds.tab),
+  adminLogin: () => adminLoginForm(),
+  adminLogout: () => { ADMIN = false; try { localStorage.removeItem(ADMIN_KEY); } catch {} closeModal(); go(PUBLIC_TABS.includes(tab) ? tab : 'dashboard'); toast('Public view — this is what residents see'); },
   gotoTower: ds => { UI.col = { q: '', date: '', tower: ds.tower, mode: '', status: '' }; go('collections'); },
   closeModal,
   addDonation: () => donationForm(),
@@ -2037,6 +2079,7 @@ document.addEventListener('click', e => {
   if (tb && tb.closest('#tabs')) return go(tb.dataset.tab);
   const b = e.target.closest('[data-act]');
   if (!b || b.disabled) return;
+  if (!ADMIN && !PUBLIC_ACTS.has(b.dataset.act)) return;
   const fn = ACTIONS[b.dataset.act];
   if (fn) { e.preventDefault(); fn(b.dataset, b, e); }
 });
@@ -2103,6 +2146,7 @@ document.addEventListener('paste', e => {
 document.addEventListener('keydown', e => {
   if (UI.lb && modal().open && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) ACTIONS.lbNav({ d: e.key === 'ArrowRight' ? 1 : -1 });
 });
-window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (TABS.some(t => t[0] === h) && h !== tab) { tab = h; render(); } });
+window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h === 'admin') return ADMIN ? go('collections') : adminLoginForm(); if (tabOk(h) && h !== tab) { tab = h; render(); } });
+if (location.hash === '#admin' && !ADMIN) setTimeout(adminLoginForm, 0);
 
 render();
