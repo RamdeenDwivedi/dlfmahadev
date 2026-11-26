@@ -472,7 +472,7 @@ const RENDER = {};
    Public is the default. Admin unlocks with the committee PIN and is remembered on that phone.
    Static site: this hides admin screens, it is not a vault — never put phones or private notes in public files. */
 const ADMIN_KEY = 'templeFundDrive.admin';
-const ADMIN_HASH = 'e712ac105137800ee3a4fed3d1aa3b6a231fe11f0d8f1d42ce73fd4695295346'; // sha256('dlfmahadev:' + PIN)
+const ADMIN_HASH = '81ee1a1021bbfb56ffe7d4fe82f04f37b6349193b494c867553f978aebb8a959'; // sha256('dlfmahadev:' + password in lower case, spaces removed)
 const PUBLIC_TABS = ['dashboard', 'film', 'seva'];
 const PUBLIC_ACTS = new Set(['goto', 'closeModal', 'copyUpi', 'shareFilm', 'setAmt', 'selfDonate', 'shareAudit', 'sendAudit', 'shareReceiptFile',
   'rmPending', 'seek', 'shareSevas', 'adminLogin', 'adminLogout']);
@@ -490,7 +490,7 @@ function adminLoginForm() {
   openModal(`<form class="form" data-form="adminLogin">
     <h3>🔒 Temple committee login</h3>
     <p class="hint">For committee members and volunteers who enter collections, pledges and drives. Residents don't need to log in.</p>
-    <label>Committee PIN<input name="pin" type="password" inputmode="numeric" autocomplete="off" required autofocus></label>
+    <label>Committee password<input name="pin" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="current-password" required autofocus></label>
     <div class="actions"><button type="button" class="btn ghost" data-act="closeModal">Cancel</button><button class="btn primary">Log in</button></div></form>`);
 }
 let tab = tabOk(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard';
@@ -1585,8 +1585,8 @@ function voteForm(p) {
 
 const FORMS = {
   adminLogin: async (v, form) => {
-    let h = ''; try { h = await sha256('dlfmahadev:' + String(v.pin || '').trim()); } catch { return toast('Login needs the https site link'); }
-    if (h !== ADMIN_HASH) { form.pin.value = ''; form.pin.focus(); return toast('Wrong PIN'); }
+    let h = ''; try { h = await sha256('dlfmahadev:' + String(v.pin || '').toLowerCase().replace(/\s+/g, '')); } catch { return toast('Login needs the https site link'); }
+    if (h !== ADMIN_HASH) { form.pin.value = ''; form.pin.focus(); return toast('Wrong password'); }
     ADMIN = true; try { localStorage.setItem(ADMIN_KEY, h); } catch {}
     closeModal(); render(); toast('Admin view on — remembered on this phone');
   },
