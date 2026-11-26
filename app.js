@@ -100,6 +100,7 @@ const AGENDA = [
   { s: 420, e: 570, t: '7:00 – 9:30', label: 'Video of the expected temple' },
   { s: 570, e: 600, t: '9:30 – 10:00', label: 'Questions → contribute or pledge → give receipt' },
 ];
+const VISITED_DONE = Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'L'].map(t => ['Tower ' + t, 100])); // visits completed, 26 Nov 2026
 const TIERS = [5101, 11001, 15001, 21001, 51001, 100001, 110001, 121001, 131001, 141001, 151001, 200001];
 const ROADMAP = [
   ['Release advances', 'Lock Rajasthan stone dispatch'], ['Site readiness', 'Book crane for the Shilpi team'],
@@ -162,7 +163,7 @@ function defaults() {
     donations: SEED_DONATIONS.map(d => ({ ...d })), pledges: SEED_PLEDGES.map(p => ({ ...p })), volunteers: [], drives: [], polls: defaultPolls(),
     weekPlans: {}, dayProofs: [], presentation: { photos: [], videoFileId: null },
     sevas: DEFAULT_SEVAS.map(s => ({ ...s, bookings: [] })), idols: DEFAULT_IDOLS.map(x => ({ ...x })),
-    coverage: { 'Tower A': 50, 'Tower B': 90 }, meta: { version: 10 },
+    coverage: { ...VISITED_DONE }, meta: { version: 11 },
   };
 }
 // Real figures from the fundraising deck / all-in-one brief: ₹10.50 L achieved incl. the first 3 days (₹42,306).
@@ -190,7 +191,7 @@ function migrate(s) {
   SEED_PLEDGES.forEach(p => { if (!s.pledges.some(x => x.id === p.id)) s.pledges.push({ ...p }); });
   s.sevas ||= DEFAULT_SEVAS.map(x => ({ ...x, bookings: [] }));
   s.idols ||= DEFAULT_IDOLS.map(x => ({ ...x }));
-  s.coverage ||= { 'Tower A': 50, 'Tower B': 90 };
+  s.coverage ||= { ...VISITED_DONE };
   s.meta = { version: 2 };
   return s;
 }
@@ -240,7 +241,7 @@ function migrate7(s) {
   return s;
 }
 /* v8+: add any new published day totals (seed-d*) that this phone doesn't have yet. */
-const SEED_VERSION = 10;
+const SEED_VERSION = 11;
 function migrateSeeds(s) {
   if ((s.meta?.version || 1) >= SEED_VERSION) return s;
   // v9: drive Day 1–3 were 22–24 Nov; the separate 24 Nov ₹1,100 is already inside Day 3.
@@ -249,6 +250,8 @@ function migrateSeeds(s) {
   const c5 = s.donations.find(d => d.id === 'seed-d5'); if (c5) c5.dateFrom = '2026-11-21';
   const have = new Set((s.donations || []).map(d => d.id));
   SEED_DONATIONS.filter(d => !have.has(d.id)).forEach(d => (s.donations ||= []).push({ ...d }));
+  // v11: door-to-door visits completed in towers A, B, C, D, E and L (26 Nov)
+  s.coverage = { ...(s.coverage || {}), ...VISITED_DONE };
   s.meta = { version: SEED_VERSION };
   return s;
 }
