@@ -137,9 +137,13 @@ const SEED_DONATIONS = [
   ['seed-d5', '2026-11-25', 'Cash collected 21–25 Nov — consolidated', 10100, '', 'Various towers', 'Cash', 'Mr. Ram', '2026-11-21'],
   ['seed-d6', '2026-11-25', 'UPI payments 25 Nov — consolidated', 10004, '6 payments', 'Various towers'],
   ['seed-d7', '2026-11-26', 'UPI payments 26 Nov — consolidated', 2100, '1 payment', 'Various towers'],
-  ['seed-d8', '2026-11-26', 'Cash collected 26 Nov — consolidated', 4000, '', 'Various towers', 'Cash', 'Mr. Ram'],
+  ['seed-d8', '2026-11-26', 'Sonali Ji (D-114), cash balance', 4000, '', 'Tower D', 'Cash', 'Mr. Ram'],
 ].map(([id, date, donor, amount, n, tower = 'Tower A & B', mode = 'UPI', cashWith = '', dateFrom = '']) => ({ id, created: 1, ...(dateFrom ? { dateFrom } : {}), households: parseInt(n) || 0, date, donor, phone: '', tower, cashWith, flat: n || '—', amount, status: 'Full', mode, ref: '', collectedBy: 'Seva team', notes: 'Consolidated day total from the drive update — replace with per-flat entries', receiptIds: [], consolidated: true }));
-const SEED_PLEDGES = [{ id: 'seed-p1', created: 1, donor: 'Drive pledges — consolidated', phone: '', tower: 'Tower A & B', flat: '—', amount: 115001, paid: 0, mode: 'UPI', dueDate: '2026-11-30', reminderDate: '2026-11-29', status: 'Pending', notes: '≈ ₹1,15,001 committed in Day 1–3 to pay by 30 Nov / salary day — split into individual pledges', consolidated: true }];
+// Receipt-book families who promised to pay after the 30 Nov salary day: [receipt no, name, tower, flat, amount (0 = not given), paid so far, note]
+const FOLLOWUPS = [["052","Mr. Harish Shankar","Tower L","123",0,0,""],["053","Neha","Tower L","112",0,0,""],["057","Mr. Amit","Tower L","091",0,0,""],["058","Mr. Sabareesan","Tower L","092",0,0,""],["059","Ayantisen","Tower L","084",0,0,""],["063","Mr. Kapil Shukla","Shops / other","—",0,0,""],["064","Mr. Vishwajit Ji","Tower L","032",0,0,""],["065","Mr. Pawan Ji","Tower L","024",0,0,""],["066","Gali Lenin Babu","Tower L","023",0,0,""],["068","Mr. Vijay Nadawade","Tower A","054",0,0,""],["072","Mr. Prithviraja","Tower A","021",0,0,""],["074","Subiksha","Tower A","012",0,0,""],["075","Shyamala","Tower A","611",0,0,""],["076","Amarjeet Singh","Tower E","911",0,0,""],["078","Nilesh Prasad","Tower C","121",0,0,""],["079","Naresh Ji","Tower C","093",0,0,""],["082","Mr. Kethan","Tower C","073",0,0,""],["083","Mr. Alok","Tower C","072",0,1000,"part"],["084","Arvind Ji","Tower C","062",0,0,""],["086","Mr. Balabhau","Tower C","052",0,0,""],["090","Mr. Basavaraj","Tower D","121",0,0,""],["092","Mr. Kowsik","Tower D","124",0,0,""],["093","Mr. Vasu","Tower D","—",0,0,""],["096","Mr. Shrikant","Tower D","101",0,0,""],["097","Shilpa","Tower D","104",0,0,""],["098","K Bujjiba","Tower D","105",0,0,""],["100","Anil Ji","Tower D","081",0,0,""],["203","Anurag Srivastava","Tower D","064",0,0,""],["209","Ajay Kumar Das","Tower S","051",5000,0,""],["211","Anishka Dubey","Tower S","011",0,0,""],["214","Mr. Sanjay Ji","Tower B","623",0,0,""],["215","Palu Ji","Tower B","822",0,0,""],["216","Mr. Tapas","Tower B","026",10000,0,""],["217","Prabhakar Pawar","Tower B","025",0,0,""],["218","Mr. Vijay","Tower B","046",0,0,""],["219","Mr. Gokul Raj","Tower B","041",0,0,""],["220","Mr. Ritabrata","Tower B","044",0,0,""],["222","Mr. Satish","Tower B","066",0,0,""],["223","Jayesh","Tower B","071",0,0,""],["224","Venketesh","Tower B","095",15000,0,"written"],["226","Elakkial","Tower B","091",0,0,""],["227","Lavanya","Tower J","062",0,0,""],["229","Ashlesha","Tower B","115",500,0,"written"],["231","Mr. Uddit Dutta","Tower B","012",0,0,""],["232","Ashwini Deshpande","Tower B","122",5100,0,""],["233","Bishvajeet Ji","Tower B","121",0,0,""],["236","Ashok Ji","Tower C","025",0,0,""],["237","Mr. Vairaagi","Tower A","012",0,0,""],["238","SRS Enterprises","Shops / other","—",5100,0,""],["239","Mr. Shivakumar","Shops / other","—",0,0,""],["240","Mr. Mahaveer","Shops / other","—",0,0,""],["241","Mr. Santosh Ji (Milk)","Shops / other","—",0,0,""],["242","Elegence Family Saloon","Shops / other","—",0,0,""],["243","Mr. Siva Ji","Tower A","041",402,0,""],["245","Mr. Ravi Keskar","Tower A","102",0,0,""],["246","Shanmugam","Tower A","091",0,0,""],["247","Mr. Yashwanth","Tower A","084",0,0,""],["248","Mr. Kirthy Kumar","Tower C","672",0,0,""],["002","Praveen","Tower C","000",0,0,""],["151","Ishita Das","Tower D","082",0,0,""],["155","(name not written)","Tower C","083",0,0,""],["156","(name not written)","Tower C","081",0,0,""],["157","(name not written)","Tower C","071",0,0,""],["159","Tamilselvan","Tower D","084",0,0,""],["160","Surekha Ji","Tower D","074",0,0,""],["161","(name not written)","Tower D","073",0,501,"part"],["162","Jay Krishna","Tower D","061",0,0,""]];
+const SEED_PLEDGES = FOLLOWUPS.map(([no, donor, tower, flat, amount, paid, note]) => ({ id: 'fu-' + no, created: 1, donor, phone: '', tower, flat, amount, paid, open: !amount, mode: 'UPI', dueDate: '2026-11-30', reminderDate: '2026-11-30', status: 'Pending',
+  notes: `Receipt ${no} · ${note === 'part' ? `paid ₹${paid.toLocaleString("en-IN")} so far, balance promised after 30 Nov` : note === 'written' ? 'amount written on receipt, not yet received' : 'promised after the 30 Nov salary day'}${amount ? '' : ' · amount not given'} · phone in the private ledger`, fromReceipt: true }));
+const pBal = p => p.open ? 0 : p.amount - (p.paid || 0);
 const LETTER_TOWERS = [...'ABCDEFGHJKLMNOPQRSTUV'].map(c => `Tower ${c}`); // 21 towers, there is no Tower I
 
 function defaultPolls() {
@@ -166,7 +170,7 @@ function defaults() {
     donations: SEED_DONATIONS.map(d => ({ ...d })), pledges: SEED_PLEDGES.map(p => ({ ...p })), volunteers: [], drives: [], polls: defaultPolls(),
     weekPlans: {}, dayProofs: [], presentation: { photos: [], videoFileId: null },
     sevas: DEFAULT_SEVAS.map(s => ({ ...s, bookings: [] })), idols: DEFAULT_IDOLS.map(x => ({ ...x })),
-    coverage: { ...VISITED_DONE }, meta: { version: 12 },
+    coverage: { ...VISITED_DONE }, meta: { version: 13 },
   };
 }
 // Real figures from the fundraising deck / all-in-one brief: ₹10.50 L achieved incl. the first 3 days (₹42,306).
@@ -244,7 +248,7 @@ function migrate7(s) {
   return s;
 }
 /* v8+: add any new published day totals (seed-d*) that this phone doesn't have yet. */
-const SEED_VERSION = 12;
+const SEED_VERSION = 13;
 function migrateSeeds(s) {
   if ((s.meta?.version || 1) >= SEED_VERSION) return s;
   // v9: drive Day 1–3 were 22–24 Nov; the separate 24 Nov ₹1,100 is already inside Day 3.
@@ -254,6 +258,13 @@ function migrateSeeds(s) {
   const have = new Set((s.donations || []).map(d => d.id));
   SEED_DONATIONS.filter(d => !have.has(d.id)).forEach(d => (s.donations ||= []).push({ ...d }));
   // v11: door-to-door visits completed in towers A, B, C, D, E and L (26 Nov)
+  if ((s.meta?.version || 1) < 13) {
+    // v13: the consolidated ₹1,15,001 pledge is replaced by the 67 receipt-book follow-ups; Sonali (D-114) paid her ₹4,000 balance on 26 Nov
+    s.pledges = (s.pledges || []).filter(p => !(p.id === 'seed-p1' && !p.paid));
+    const d8 = (s.donations || []).find(d => d.id === 'seed-d8'); if (d8) Object.assign(d8, { donor: 'Sonali Ji (D-114), cash balance', tower: 'Tower D' });
+  }
+  const havP = new Set((s.pledges || []).map(p => p.id));
+  SEED_PLEDGES.filter(p => !havP.has(p.id)).forEach(p => (s.pledges ||= []).push({ ...p }));
   if ((s.meta?.version || 1) < 11) s.coverage = { ...(s.coverage || {}), ...VISITED_DONE };
   s.meta = { version: SEED_VERSION };
   return s;
@@ -354,7 +365,7 @@ function totals() {
   return {
     collected, achieved, remaining, daysLeft, perDay, pct: pctOf(achieved, st.target),
     todayAmt: sum(todays.map(d => d.amount)), todayCount: todays.length,
-    pledgedPending: sum(pend.map(p => p.amount - (p.paid || 0))), pendingCount: pend.length,
+    pledgedPending: sum(pend.map(pBal)), pendingCount: pend.length, openCount: pend.filter(p => p.open).length,
   };
 }
 // Entries with dateFrom cover several days (e.g. cash 21–25 Nov) and are not shown as one day's collection.
@@ -383,13 +394,13 @@ function households() {
 function topContributors(n = 5) {
   const m = {};
   const add = (r, amt, kind) => {
-    if (r.consolidated) return;
+    if (r.consolidated || r.fromReceipt) return;
     const k = `${r.donor.trim().toLowerCase()}|${r.tower}|${String(r.flat).trim().toLowerCase()}`;
     const e = m[k] ||= { donor: r.donor, tower: r.tower, flat: r.flat, paid: 0, pledged: 0 };
     e[kind] += amt;
   };
   S.donations.forEach(d => add(d, +d.amount || 0, 'paid'));
-  S.pledges.filter(p => p.status === 'Pending').forEach(p => add(p, p.amount - (p.paid || 0), 'pledged'));
+  S.pledges.filter(p => p.status === 'Pending').forEach(p => add(p, pBal(p), 'pledged'));
   return Object.values(m).sort((a, b) => (b.paid + b.pledged) - (a.paid + a.pledged)).slice(0, n);
 }
 function bookingPaid(b) { return b.paid || S.pledges.find(p => p.id === b.pledgeId)?.status === 'Fulfilled'; }
@@ -570,7 +581,7 @@ RENDER.dashboard = () => {
     ${kpi('Today', inr(T.todayAmt), `${T.todayCount} donor${T.todayCount === 1 ? '' : 's'}`)}
     ${kpi('This week', inr(weekAmt), `since ${fmtD(mondayOf(t))}`)}
     ${kpi('Homes contributed', `${households()}${st.homes ? `<span class="muted" style="font-size:.9rem"> / ${st.homes}</span>` : ''}`, st.homes ? `${pctOf(households(), st.homes).toFixed(1)}% of homes · avg ${inr(avg)}` : `avg ${inr(avg)}`)}
-    ${kpi('Pledged, still due', inr(T.pledgedPending), `${T.pendingCount} pledge${T.pendingCount === 1 ? '' : 's'}`)}
+    ${kpi('Pledged, still due', inr(T.pledgedPending), `${T.pendingCount} famil${T.pendingCount === 1 ? 'y' : 'ies'}${T.openCount ? ` · ${T.openCount} amount not given` : ''}`)}
     ${ADMIN ? (c => kpi('Cash collected', inr(c.total), c.inHand ? `${inr(c.inHand)} still in hand` : 'all deposited', c.inHand ? 'warn' : ''))(cashStats()) : ''}
     ${ADMIN ? kpi('Reminders due', due.length, 'today or overdue', due.length ? 'warn' : '') : ''}
   </section>
@@ -1035,10 +1046,10 @@ function proofGallery() {
 
 /* ---------- Pledges ---------- */
 function remCard(p) {
-  const t = today(), bal = p.amount - (p.paid || 0), late = p.reminderDate < t;
+  const t = today(), bal = pBal(p), late = p.reminderDate < t;
   return `<div class="rem ${late ? 'overdue' : ''}">
     <div><div class="who">${esc(p.donor)} <span class="muted small">· ${esc(p.tower)} ${esc(p.flat)}</span></div>
-      <div class="meta">${inr(bal)} due${p.paid ? ` (paid ${inr(p.paid)} of ${inr(p.amount)})` : ''} · reminder ${late ? `<b>overdue since ${fmtD(p.reminderDate)}</b>` : 'today'}${p.lastReminded ? ` · last reminded ${fmtD(p.lastReminded)} (${p.remindCount || 1}×)` : ''}</div></div>
+      <div class="meta">${p.open ? `Amount not given${p.paid ? ` (paid ${inr(p.paid)} so far)` : ''}` : `${inr(bal)} due${p.paid ? ` (paid ${inr(p.paid)} of ${inr(p.amount)})` : ''}`} · reminder ${late ? `<b>overdue since ${fmtD(p.reminderDate)}</b>` : 'today'}${p.lastReminded ? ` · last reminded ${fmtD(p.lastReminded)} (${p.remindCount || 1}×)` : ''}</div></div>
     <div class="row-actions">
       <button class="btn sm wa" data-act="remind" data-id="${p.id}">💬 Remind</button>
       <button class="btn sm" data-act="payPledge" data-id="${p.id}">₹ Record payment</button>
@@ -1055,9 +1066,9 @@ RENDER.pledges = () => {
   <div class="toolbar"><button class="btn primary" data-act="addPledge">+ Add pledge</button>
     <span class="muted small">A part payment in Collections automatically creates a pledge for the balance.</span></div>
   <section class="kpis">
-    ${kpi('Pledged, still due', inr(sum(pend.map(p => p.amount - (p.paid || 0)))), `${pend.length} families`)}
+    ${kpi('Pledged, still due', inr(sum(pend.map(pBal))), `${pend.length} families${pend.some(p => p.open) ? ` · ${pend.filter(p => p.open).length} amount not given` : ''}`)}
     ${kpi('Reminders due', due.length, 'today or overdue', due.length ? 'warn' : '')}
-    ${kpi('Reminders next 7 days', next7.length, inr(sum(next7.map(p => p.amount - (p.paid || 0)))))}
+    ${kpi('Reminders next 7 days', next7.length, inr(sum(next7.map(pBal))))}
     ${kpi('Pledges fulfilled', fulfilled.length, inr(sum(fulfilled.map(p => p.amount))), 'good')}
   </section>
   <section class="card"><div class="card-h"><h2>🔔 Send these reminders today</h2><span class="muted small">"Remind" opens WhatsApp with the message filled in and schedules the next reminder in 3 days</span></div>
@@ -1069,8 +1080,8 @@ RENDER.pledges = () => {
     ${list.map(p => `<tr>
       <td data-label="Donor"><b>${esc(p.donor)}</b>${p.phone ? `<div class="small muted">${esc(p.phone)}</div>` : ''}${p.notes ? `<div class="small muted">${esc(p.notes)}</div>` : ''}</td>
       <td data-label="Tower / Flat">${esc(p.tower)} · ${esc(p.flat)}</td>
-      <td class="r" data-label="Pledged">${inr(p.amount)}</td>
-      <td class="r" data-label="Balance"><b>${inr(p.amount - (p.paid || 0))}</b></td>
+      <td class="r" data-label="Pledged">${p.open ? '<span class="badge warn">Amount not given</span>' : inr(p.amount)}</td>
+      <td class="r" data-label="Balance"><b>${p.open ? '—' : inr(pBal(p))}</b></td>
       <td data-label="Pay by">${fmtD(p.dueDate)}</td>
       <td data-label="Next reminder">${p.status === 'Pending' ? `${fmtD(p.reminderDate)}${p.reminderDate && p.reminderDate <= t ? ' <span class="badge warn">due</span>' : ''}` : '—'}</td>
       <td data-label="Status">${statusBadge(p.status)}</td>
@@ -1636,7 +1647,7 @@ const FORMS = {
       const p = S.pledges.find(x => x.id === fd.pledgeId);
       if (p) {
         p.paid = (p.paid || 0) + amount;
-        if (p.paid >= p.amount) { p.status = 'Fulfilled'; msg = 'Pledge fulfilled 🎉'; }
+        if (p.open || p.paid >= p.amount) { if (p.open) { p.amount = p.paid; p.open = false; } p.status = 'Fulfilled'; msg = 'Pledge fulfilled 🎉'; }
         else { p.reminderDate = addDays(today(), 7); msg = `Part paid — ${inr(p.amount - p.paid)} still due`; }
       }
     }
@@ -1779,12 +1790,12 @@ const ACTIONS = {
   delPledge: ds => { const p = findP(ds.id); if (p && confirm(`Delete pledge of ${p.donor}?`)) { S.pledges = S.pledges.filter(x => x !== p); save(); render(); } },
   remind: ds => {
     const p = findP(ds.id), t = today();
-    openWA(p.phone, fillTpl(S.settings.reminderTpl, { name: p.donor, amount: inr(p.amount - (p.paid || 0)) }));
+    openWA(p.phone, fillTpl(S.settings.reminderTpl, { name: p.donor, amount: p.open ? 'any amount you wish (from ' + inr(S.settings.minDonation) + ')' : inr(pBal(p)) }));
     Object.assign(p, { lastReminded: t, remindCount: (p.remindCount || 0) + 1, reminderDate: addDays(t, 3) });
     save(); render(); toast(`${p.phone ? '' : 'No phone saved — pick the contact in WhatsApp. '}Next reminder: ${fmtD(p.reminderDate)}`);
   },
   snooze: ds => { const p = findP(ds.id); p.reminderDate = addDays(today(), 3); save(); render(); toast('Reminder moved to ' + fmtD(p.reminderDate)); },
-  payPledge: ds => { const p = findP(ds.id); donationForm({ donor: p.donor, phone: p.phone, tower: p.tower, flat: p.flat, amount: p.amount - (p.paid || 0), mode: p.mode, pledgeId: p.id, status: 'Full' }); },
+  payPledge: ds => { const p = findP(ds.id); donationForm({ donor: p.donor, phone: p.phone, tower: p.tower, flat: p.flat, amount: p.open ? '' : pBal(p), mode: p.mode, pledgeId: p.id, status: 'Full' }); },
 
   addVolunteer: () => volunteerForm(),
   editVolunteer: ds => volunteerForm(S.volunteers.find(v => v.id === ds.id)),
