@@ -660,12 +660,12 @@ function towerList() {
     </div>`;
   }).join('')}</div>${extra.length ? `<p class="hint" style="margin-top:8px">Also: ${extra.map(t => `${esc(t)} ${inr(m[t].amount)}`).join(' · ')} (consolidated entries not tied to one tower)</p>` : ''}`;
 }
-// Top 5 contributors as confirmed by the committee (26 Nov 2026). Gupt Daan donors are never named.
+// Top 5 contributors (committee + latest WH register PDF, 26 Nov 2026). Gupt Daan donors are never named.
 const YAJMANS = [
   { donor: 'Gupt Daan 🙏', note: 'Nandi Ji murti & Pratishtha', amount: 100000 },
   { donor: 'Shri Murali ji', note: 'Narmadeshwar Shivling', amount: 50000 },
   { donor: 'Saikat Sarkar', note: 'P-034', amount: 25001 },
-  { donor: 'Dheeraj Sharma', note: 'B-086', amount: 21000 },
+  { donor: 'Sudipta Paul', note: 'E-022', amount: 21000 },
   { donor: 'Omprakash Prajapat', note: 'L-063', amount: 21000 },
 ];
 function yajmanList() {
