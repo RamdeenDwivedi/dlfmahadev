@@ -40,8 +40,9 @@ function openWA(phone, msg) {
   const url = 'https://api.whatsapp.com/send?' + (p ? `phone=${p}&` : '') + 'text=' + encodeURIComponent(msg);
   window.open(url, '_blank', 'noopener');
 }
+const SITE_URL = 'https://ramdeendwivedi.github.io/dlfmahadev/';
 function siteLink() {
-  return /^https?:$/.test(location.protocol) && !/^(localhost|127\.)/.test(location.hostname) ? location.origin + location.pathname : '';
+  return /^https?:$/.test(location.protocol) && !/^(localhost|127\.)/.test(location.hostname) ? location.origin + location.pathname : SITE_URL;
 }
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); toast('Copied to clipboard'); }
@@ -1144,6 +1145,17 @@ RENDER.film = () => {
 };
 
 /* ---------- Seva & sponsors ---------- */
+function sevaContact() {
+  const st = S.settings, ph = String(st.auditPhone).replace(/\D/g, ''), wa = ph.length === 10 ? '91' + ph : ph;
+  const msg = encodeURIComponent(`Har Har Mahadev 🙏 I would like to book a seva for ${st.temple}.`);
+  return `<div class="callout info seva-contact" style="margin-top:12px">
+    <div><b>To book a seva, contact ${esc(st.auditName)} · ${esc(fmtPhone(st.auditPhone))}</b><br><span class="small">Pay in parts until ${fmtD(st.deadline)} if you wish · Gupt Daan welcome</span></div>
+    <div class="row-actions" style="justify-content:flex-start;margin-top:8px">
+      <a class="btn sm wa" href="https://api.whatsapp.com/send?phone=${wa}&text=${msg}" target="_blank" rel="noopener">💬 WhatsApp ${esc(st.auditName)}</a>
+      <a class="btn sm" href="tel:+${wa}">📞 Call ${esc(fmtPhone(st.auditPhone))}</a>
+      <a class="btn sm" href="${SITE_URL}#seva" target="_blank" rel="noopener">🌐 ${SITE_URL.replace(/^https:\/\//, '').replace(/\/$/, '')}</a>
+    </div></div>`;
+}
 RENDER.seva = () => {
   const k = sevaStats(), st = S.settings;
   return `
@@ -1163,6 +1175,7 @@ RENDER.seva = () => {
         <td data-label=""><div class="row-actions">${left ? `<button class="btn sm primary" data-act="bookSeva" data-seva="${x.id}">Book slot</button>` : ''}<button class="btn sm icon" data-act="editSeva" data-seva="${x.id}" title="Edit">✏️</button></div></td></tr>`;
     }).join('')}</tbody></table></div>
     <div class="row-actions" style="justify-content:flex-start;margin-top:10px"><button class="btn sm" data-act="addSeva">+ Add seva item</button><button class="btn sm wa" data-act="shareSevas">💬 Share open slots</button></div>
+    ${sevaContact()}
   </section>
   <div class="grid-2">
     <section class="card"><h2>Deity sevas & sponsors</h2><div class="rem-list">${(S.idols || []).map(x => `<div class="rem"><div><div class="who">${esc(x.name)}${x.amount ? ` · ${inr(x.amount)}` : ''}</div><div class="meta">${x.note ? esc(x.note) + ' · ' : ''}${x.sponsor ? `Sponsored by <b>${esc(x.sponsor)}</b>` : 'Open for sponsorship — contact the Temple Committee'}</div></div>
@@ -1948,7 +1961,7 @@ const ACTIONS = {
   delSeva: ds => { S.sevas = S.sevas.filter(v => v.id !== ds.seva); save(); closeModal(); render(); },
   shareSevas: () => {
     const open = S.sevas.filter(x => x.slots > x.bookings.length);
-    openWA('', `🔱 *Dedicate a part of Mahadev's home* — ${S.settings.temple}\n\n${open.map(x => `• ${x.name}: ${inr(x.amount)}${x.slots > 1 ? ' each' : ''} (${x.slots - x.bookings.length} open)`).join('\n')}\n\nFamily seva from ${inr(S.settings.minDonation)} • UPI: ${S.settings.upi}\nHar Har Mahadev 🙏`);
+    openWA('', `🔱 *Dedicate a part of Mahadev's home* — ${S.settings.temple}\n\n${open.map(x => `• ${x.name}: ${inr(x.amount)}${x.slots > 1 ? ' each' : ''} (${x.slots - x.bookings.length} open)`).join('\n')}\n\nFamily seva from ${inr(S.settings.minDonation)} • UPI: ${S.settings.upi}\n📞 To book a seva: *${S.settings.auditName} · ${fmtPhone(S.settings.auditPhone)}* (call or WhatsApp)\n🌐 See all sevas: ${siteLink()}#seva\nHar Har Mahadev 🙏`);
   },
   setIdol: ds => {
     const x = S.idols.find(v => v.id === ds.id);
