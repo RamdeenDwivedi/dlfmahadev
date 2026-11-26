@@ -660,11 +660,17 @@ function towerList() {
     </div>`;
   }).join('')}</div>${extra.length ? `<p class="hint" style="margin-top:8px">Also: ${extra.map(t => `${esc(t)} ${inr(m[t].amount)}`).join(' · ')} (consolidated entries not tied to one tower)</p>` : ''}`;
 }
+// Top 5 contributors as confirmed by the committee (26 Nov 2026). Gupt Daan donors are never named.
+const YAJMANS = [
+  { donor: 'Gupt Daan 🙏', note: 'Nandi Ji murti & Pratishtha', amount: 100000 },
+  { donor: 'Shri Murali ji', note: 'Narmadeshwar Shivling', amount: 50000 },
+  { donor: 'Saikat Sarkar', note: 'P-034', amount: 25001 },
+  { donor: 'Dheeraj Sharma', note: 'B-086', amount: 21000 },
+  { donor: 'Omprakash Prajapat', note: 'L-063', amount: 21000 },
+];
 function yajmanList() {
-  const top = topContributors(5);
-  if (!top.length) return empty('Add individual collections or pledges to see the top contributors.');
-  return `<ol class="yaj">${top.map((x, i) => `<li><span class="rank">${i + 1}</span><span><b>${esc(x.donor)}</b><small>${esc(x.tower)} · ${esc(x.flat)}</small></span>
-    <span class="r"><b>${inr(x.paid + x.pledged)}</b><small>${x.pledged ? `${inr(x.paid)} paid + ${inr(x.pledged)} pledged` : 'paid'}</small></span></li>`).join('')}</ol>`;
+  return `<ol class="yaj">${YAJMANS.map((x, i) => `<li><span class="rank">${i + 1}</span><span><b>${esc(x.donor)}</b><small>${esc(x.note)}</small></span>
+    <span class="r"><b>${inr(x.amount)}</b><small>${i === 0 ? 'Day 1 Mukhya Yajman' : 'Yajman'}</small></span></li>`).join('')}</ol>`;
 }
 function sevaMini() {
   const k = sevaStats();
