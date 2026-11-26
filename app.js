@@ -41,6 +41,8 @@ function openWA(phone, msg) {
   window.open(url, '_blank', 'noopener');
 }
 const SITE_URL = 'https://ramdeendwivedi.github.io/dlfmahadev/';
+// Google Apps Script web app (Code.gs in the private Temple-Ledger folder). Empty = submissions stay on the resident's phone only.
+const ONLINE_URL = '';
 function siteLink() {
   return /^https?:$/.test(location.protocol) && !/^(localhost|127\.)/.test(location.hostname) ? location.origin + location.pathname : SITE_URL;
 }
@@ -284,10 +286,72 @@ function load() {
   return defaults();
 }
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  try { localStorage.setItem(KEY, JSON.stringify({ ...S, donations: S.donations.filter(d => !d.online) })); }
   catch (e) { toast('⚠ Could not save — browser storage is full or blocked.'); }
 }
 let S = load();
+
+/* ---------- Online submissions (shared Google Sheet) ---------- */
+const ONL_KEY = 'templeFundDrive.online', ADMIN_PW = 'templeFundDrive.key';
+const ONL = { items: null, loading: false, err: '', busy: {} };
+async function api(body) {
+  const r = await fetch(ONLINE_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+  const j = await r.json(); if (!j.ok) throw new Error(j.error || 'failed'); return j;
+}
+const adminPw = () => { try { return localStorage.getItem(ADMIN_PW) || ''; } catch { return ''; } };
+// Accepted online submissions appear in every phone's totals as day totals (no names), never saved locally.
+function applyOnline(sum) {
+  S.donations = S.donations.filter(d => !d.online);
+  (sum?.days || []).forEach(x => S.donations.push({ id: `online-${x.date}-${x.mode}`, online: true, consolidated: true, created: 1, date: x.date, households: x.count,
+    donor: `Resident form — ${x.count} donation${x.count === 1 ? '' : 's'}`, phone: '', tower: 'Online (resident form)', flat: '—', amount: x.amount, status: 'Full',
+    mode: x.mode, cashWith: x.mode === 'Cash' ? 'Volunteer (resident form)' : '', ref: '', collectedBy: 'Resident form', notes: 'Checked and added by the committee (shared sheet)', receiptIds: [] }));
+}
+try { applyOnline(JSON.parse(localStorage.getItem(ONL_KEY) || 'null')); } catch {}
+function loadOnline() {
+  if (!ONLINE_URL) return;
+  api({ action: 'summary' }).then(j => { try { localStorage.setItem(ONL_KEY, JSON.stringify(j)); } catch {} applyOnline(j); if (!document.querySelector('dialog[open]')) render(); }).catch(() => {});
+}
+function loadOnlineList(force) {
+  if (!ONLINE_URL || !ADMIN || (ONL.loading) || (ONL.items && !force)) return;
+  if (!adminPw()) { ONL.err = 'login'; return; }
+  ONL.loading = true;
+  api({ action: 'list', key: adminPw() }).then(j => { ONL.items = j.items; ONL.err = ''; }).catch(e => { ONL.err = e.message === 'auth' ? 'login' : 'net'; })
+    .finally(() => { ONL.loading = false; if (tab === 'collections' && !document.querySelector('dialog[open]')) render(); else renderHeader(); });
+}
+async function shrinkImage(f, max = 1400) {
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type)) return f;
+  try {
+    const bmp = await createImageBitmap(f), k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise(res => c.toBlob(b => res(b || f), 'image/jpeg', 0.82));
+  } catch { return f; }
+}
+const toB64 = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(b); });
+async function sendSubmission(rec, files) {
+  const enc = await Promise.all(files.slice(0, 3).map(async f => { const b = await shrinkImage(f); return { type: b.type || f.type || 'image/jpeg', data: await toB64(b) }; }));
+  const { receiptIds, ...pub } = rec;
+  await api({ action: 'submit', rec: pub, files: enc });
+}
+function onlineSection() {
+  if (!ONLINE_URL) return `<section class="card"><div class="card-h"><h2>📲 Online submissions</h2></div>${empty('Not connected yet: residents\' "Submit my donation" forms stay on their own phones. Connect the shared Google Sheet to receive them here.')}</section>`;
+  loadOnlineList();
+  const head = `<div class="card-h"><h2>📲 Online submissions from residents</h2><button class="btn sm" data-act="reloadOnline">↻ Refresh</button></div>`;
+  if (ONL.err === 'login') return `<section class="card">${head}${empty('Log in again with the committee password to load submissions. <button class="btn sm" data-act="adminLogin">Log in</button>')}</section>`;
+  if (ONL.err === 'net') return `<section class="card">${head}${empty('Could not reach the shared sheet. Check the connection and tap Refresh.')}</section>`;
+  if (!ONL.items) return `<section class="card">${head}${empty('Loading…')}</section>`;
+  const nu = ONL.items.filter(x => x.status === 'New'), done = ONL.items.filter(x => x.status !== 'New').slice(-5).reverse();
+  const card = x => `<div class="rem"><div><div class="who">${esc(x.donor)} · ${inr(x.amount)} ${x.status === 'New' ? '' : statusBadge(x.status === 'Added' ? 'Fulfilled' : 'Cancelled')}</div>
+    <div class="meta">Paid ${fmtD(x.date)} · ${esc(x.tower)} ${esc(x.flat)} (${esc(x.occupancy || '—')}) · ${esc(x.mode)}${x.ref ? ' · ref ' + esc(x.ref) : ''} · ${esc(x.phone)}</div>
+    ${x.files.length ? `<div class="chips">${x.files.map((u, i) => `<a class="chip" href="${esc(u)}" target="_blank" rel="noopener">📎 Screenshot ${i + 1}</a>`).join('')}</div>` : '<div class="small muted">No screenshot</div>'}</div>
+    <div class="row-actions">${x.status === 'New' ? `<button class="btn sm primary" data-act="markOnline" data-id="${esc(x.id)}" data-st="Added" ${ONL.busy[x.id] ? 'disabled' : ''}>✅ Add to collections</button>
+      <button class="btn sm ghost" data-act="markOnline" data-id="${esc(x.id)}" data-st="Rejected" ${ONL.busy[x.id] ? 'disabled' : ''}>Not received</button>`
+      : `<button class="btn sm ghost" data-act="markOnline" data-id="${esc(x.id)}" data-st="New">Undo</button>`}</div></div>`;
+  return `<section class="card">${head}
+    <p class="hint">Check each one against the bank statement or the payment screenshot. <b>Add to collections</b> updates the website total on every phone within a minute. Duplicates of UPI screenshots already added from WhatsApp should be marked <b>Not received</b>.</p>
+    ${nu.length ? `<div class="rem-list">${nu.map(card).join('')}</div>` : empty('No new submissions 🙏')}
+    ${done.length ? `<h3 style="margin:14px 0 8px">Recently checked</h3><div class="rem-list compact">${done.map(card).join('')}</div>` : ''}</section>`;
+}
 
 /* IndexedDB for files (receipts, photos, video) */
 const FileDB = (() => {
@@ -518,7 +582,7 @@ function renderHeader() {
   $('#top-progress').innerHTML = `<div><b>${lakh(T.achieved)}</b> of ${lakh(st.target)} · ${T.pct.toFixed(1)}% · <b>${T.daysLeft}</b> days left</div>
     <div class="pbar"><span class="seg-open" style="width:${pctOf(st.opening, st.target)}%"></span><span class="seg-col" style="width:${pctOf(T.collected, st.target)}%"></span></div>`;
   const due = duePledges().length;
-  $('#tabs').innerHTML = visibleTabs().map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${l}${k === 'pledges' && due ? ` <span class="badge warn">${due}</span>` : ''}</button>`).join('')
+  $('#tabs').innerHTML = visibleTabs().map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${l}${k === 'pledges' && due ? ` <span class="badge warn">${due}</span>` : ''}${k === 'collections' && ONL.items && ONL.items.some(x => x.status === 'New') ? ` <span class="badge warn">${ONL.items.filter(x => x.status === 'New').length}</span>` : ''}</button>`).join('')
     + (ADMIN ? `<button class="view-tag admin" data-act="adminLogout" title="Switch to the public view">🔓 Admin · Exit</button>` : '');
   $('#vol-list').innerHTML = S.volunteers.map(v => `<option value="${esc(v.name)}">`).join('');
   document.title = `${st.temple} Seva Drive`;
@@ -932,7 +996,8 @@ function thanksScreen(r) {
     <div class="thanks-om">🔱</div>
     <h3>Thank you, ${esc(r.donor)} ji! 🙏</h3>
     <p>Your offering of <b>${inr(r.amount)}</b> is a seva towards bringing <b>Narmadeshwar Mahadev</b> home to ${esc(st.society)}. May Mahadev bless your family.</p>
-    <div class="callout info"><b>One last step, for audit:</b> send this receipt to <b>${esc(st.auditName)} (${esc(fmtPhone(st.auditPhone))})</b> on WhatsApp.
+    ${r.sent ? `<div class="callout good">✅ <b>Received by the temple committee.</b> It will be added to the total once checked against the bank statement.</div>` : r.sent === false ? `<div class="callout warn">⚠ Could not send it online right now, so please use WhatsApp below.</div>` : ''}
+    <div class="callout info"><b>${r.sent ? 'Optional, for audit:' : 'One last step, for audit:'}</b> send this receipt to <b>${esc(st.auditName)} (${esc(fmtPhone(st.auditPhone))})</b> on WhatsApp.
       ${canFile ? 'Tap <b>Share receipt</b>, choose <b>WhatsApp</b>, then pick ' + esc(st.auditName) + '.' : 'WhatsApp opens with your details filled in. Tap 📎 and attach your payment screenshot before sending.'}</div>
     <div class="row-actions" style="justify-content:center;flex-wrap:wrap">
       ${canFile ? `<button class="btn primary" data-act="shareReceiptFile">📤 Share receipt + screenshot</button>` : ''}
@@ -954,6 +1019,7 @@ RENDER.collections = () => {
     <button class="btn ghost" data-act="exportCSV">⬇ Export CSV</button>
   </div>
   <section class="card"><div class="card-h"><h2>Day-wise summary</h2><span class="muted small">Tap a day to filter the list</span></div>${daySummary()}</section>
+  ${onlineSection()}
   ${subsSection()}
   <section class="card" id="cash"><div class="card-h"><h2>💵 Cash collection</h2><span class="muted small">Kept separate from UPI until it reaches the temple account</span></div>${cashSection()}</section>
   <section class="card">
@@ -1621,7 +1687,8 @@ const FORMS = {
   adminLogin: async (v, form) => {
     let h = ''; try { h = await sha256('dlfmahadev:' + String(v.pin || '').toLowerCase().replace(/\s+/g, '')); } catch { return toast('Login needs the https site link'); }
     if (h !== ADMIN_HASH) { form.pin.value = ''; form.pin.focus(); return toast('Wrong password'); }
-    ADMIN = true; try { localStorage.setItem(ADMIN_KEY, h); } catch {}
+    ADMIN = true; try { localStorage.setItem(ADMIN_KEY, h); localStorage.setItem(ADMIN_PW, String(v.pin || '').toLowerCase().replace(/\s+/g, '')); } catch {}
+    ONL.items = null; ONL.err = '';
     closeModal(); render(); toast('Admin view on — remembered on this phone');
   },
   async selfDonate(fd) {
@@ -1636,6 +1703,11 @@ const FORMS = {
       phone: fd.phone.trim(), amount, mode: fd.mode, ref: (fd.ref || '').trim(), receiptIds: ids };
     (S.submissions ||= []).push(rec); save();
     UI.lastSub = rec;
+    if (ONLINE_URL) {
+      const btn = $('#modal-body button.primary'); if (btn) { btn.disabled = true; btn.textContent = 'Sending to the temple committee…'; }
+      try { await sendSubmission(rec, files); rec.sent = true; } catch (e) { rec.sent = false; }
+      save();
+    }
     UI.lastShare = files.filter(f => f.type.startsWith('image/') || f.type === 'application/pdf').map((f, i) => f instanceof File ? f : new File([f], `receipt-${i + 1}.jpg`, { type: f.type || 'image/jpeg' }));
     thanksScreen(rec);
   },
@@ -1770,13 +1842,26 @@ const findP = id => S.pledges.find(x => x.id === id);
 const findPoll = id => S.polls.find(x => x.id === id);
 const ACTIONS = {
   goto: ds => go(ds.tab),
+  reloadOnline: () => { ONL.items = null; ONL.err = ''; loadOnline(); loadOnlineList(true); render(); },
+  markOnline: async ds => {
+    if (ds.st === 'Rejected' && !confirm('Mark this submission as not received? It will not be counted.')) return;
+    ONL.busy[ds.id] = true; render();
+    try {
+      const j = await api({ action: 'mark', key: adminPw(), id: ds.id, status: ds.st, by: 'Committee (website)' });
+      const x = ONL.items.find(v => v.id === ds.id); if (x) x.status = ds.st;
+      try { localStorage.setItem(ONL_KEY, JSON.stringify(j.summary)); } catch {} applyOnline(j.summary);
+      toast(ds.st === 'Added' ? 'Added — the website total is updated 🙏' : ds.st === 'New' ? 'Moved back to new' : 'Marked not received');
+    } catch (e) { toast(e.message === 'auth' ? 'Log in again with the committee password' : 'Could not update the sheet — try again'); }
+    delete ONL.busy[ds.id]; render();
+  },
   adminLogin: () => adminLoginForm(),
-  adminLogout: () => { ADMIN = false; try { localStorage.removeItem(ADMIN_KEY); } catch {} closeModal(); go(PUBLIC_TABS.includes(tab) ? tab : 'dashboard'); toast('Public view — this is what residents see'); },
+  adminLogout: () => { ADMIN = false; ONL.items = null; try { localStorage.removeItem(ADMIN_KEY); localStorage.removeItem(ADMIN_PW); } catch {} closeModal(); go(PUBLIC_TABS.includes(tab) ? tab : 'dashboard'); toast('Public view — this is what residents see'); },
   gotoTower: ds => { UI.col = { q: '', date: '', tower: ds.tower, mode: '', status: '' }; go('collections'); },
   closeModal,
   addDonation: () => donationForm(),
-  editDonation: ds => donationForm(findD(ds.id)),
+  editDonation: ds => findD(ds.id)?.online ? toast('This total comes from the online submissions sheet — change it there') : donationForm(findD(ds.id)),
   delDonation: ds => {
+    if (findD(ds.id)?.online) return toast('This total comes from the online submissions sheet — mark the submission "Not received" instead');
     const d = findD(ds.id); if (!d || !confirm(`Delete ${d.donor}'s collection of ${inr(d.amount)}?`)) return;
     delFiles(d.receiptIds); S.donations = S.donations.filter(x => x !== d); save(); render(); toast('Deleted');
   },
@@ -2186,4 +2271,5 @@ document.addEventListener('keydown', e => {
 window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h === 'admin') return ADMIN ? go('collections') : adminLoginForm(); if (tabOk(h) && h !== tab) { tab = h; render(); } });
 if (location.hash === '#admin' && !ADMIN) setTimeout(adminLoginForm, 0);
 
+loadOnline(); setInterval(loadOnline, 5 * 60000);
 render();
