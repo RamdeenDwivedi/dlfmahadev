@@ -594,7 +594,7 @@ RENDER.dashboard = () => {
   </section>
 
   <div class="grid-2">
-    <section class="card"><div class="card-h"><h2>🏆 Top 5 contributors — Prana Pratishtha Yajmans</h2><span class="muted small">Highest = Day 1 Mukhya Yajman</span></div>${yajmanList()}</section>
+    <section class="card"><div class="card-h"><h2>🏆 Top 5 contributors</h2><span class="muted small">Highest contributions so far · thank you 🙏</span></div>${yajmanList()}</section>
     <section class="card"><div class="card-h"><h2>🪔 Temple seva slots</h2><button class="btn sm" data-act="goto" data-tab="seva">Open →</button></div>${sevaMini()}</section>
   </div>
 
@@ -670,7 +670,7 @@ const YAJMANS = [
 ];
 function yajmanList() {
   return `<ol class="yaj">${YAJMANS.map((x, i) => `<li><span class="rank">${i + 1}</span><span><b>${esc(x.donor)}</b><small>${esc(x.note)}</small></span>
-    <span class="r"><b>${inr(x.amount)}</b><small>${i === 0 ? 'Day 1 Mukhya Yajman' : 'Yajman'}</small></span></li>`).join('')}</ol>`;
+    <span class="r"><b>${inr(x.amount)}</b>${i === 0 ? '<small>Highest contribution</small>' : ''}</span></li>`).join('')}</ol>`;
 }
 function sevaMini() {
   const k = sevaStats();
