@@ -470,7 +470,7 @@ const RENDER = {};
    Static site: this hides admin screens, it is not a vault — never put phones or private notes in public files. */
 const ADMIN_KEY = 'templeFundDrive.admin';
 const ADMIN_HASH = 'e712ac105137800ee3a4fed3d1aa3b6a231fe11f0d8f1d42ce73fd4695295346'; // sha256('dlfmahadev:' + PIN)
-const PUBLIC_TABS = ['dashboard', 'film', 'ledger', 'seva'];
+const PUBLIC_TABS = ['dashboard', 'film', 'seva'];
 const PUBLIC_ACTS = new Set(['goto', 'closeModal', 'copyUpi', 'shareFilm', 'setAmt', 'selfDonate', 'shareAudit', 'sendAudit', 'shareReceiptFile',
   'rmPending', 'seek', 'shareSevas', 'adminLogin', 'adminLogout']);
 let ADMIN = (() => { try { return localStorage.getItem(ADMIN_KEY) === ADMIN_HASH; } catch { return false; } })();
@@ -554,7 +554,7 @@ RENDER.dashboard = () => {
     <div class="hero-stats">
       <div><b>${T.daysLeft}</b><span>days left · deadline ${fmtD(st.deadline)}</span></div>
       <div><b>${inr(T.perDay)}</b><span>needed per day</span></div>
-      <div><b>${inr(T.remaining / Math.max(1, st.towers.length))}</b><span>remaining per tower (avg of ${st.towers.length})</span></div>
+      <div class="admin-only"><b>${inr(T.remaining / Math.max(1, st.towers.length))}</b><span>remaining per tower (avg of ${st.towers.length})</span></div>
       <div><b>${Math.ceil(T.remaining / Math.max(1, st.minDonation))}</b><span>families at ${inr(st.minDonation)} to close the gap</span></div>
     </div>
     ${callout}
@@ -580,7 +580,7 @@ RENDER.dashboard = () => {
   </div>
 
   <div class="grid-2">
-    <section class="card">
+    <section class="card admin-only">
       <div class="card-h"><h2>Tower-wise progress</h2><span class="muted small">Bar vs. per-tower share ${inr((st.target - st.opening) / Math.max(1, st.towers.length))}</span></div>
       ${towerList()}
     </section>

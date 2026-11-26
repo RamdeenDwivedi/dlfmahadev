@@ -409,3 +409,4 @@ dialog::backdrop { background: rgba(20, 12, 4, .55); }
 .view-foot { max-width: 1200px; margin: 24px auto 8px; padding: 14px 12px; text-align: center; font-size: .85rem; color: var(--muted); border-top: 1px solid var(--line, rgba(0,0,0,.1)); }
 .view-foot .link { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
 .tabs .view-tag { margin-left: auto; flex: none; white-space: nowrap; color: var(--gold); font-weight: 600; }
+.grid-2:has(> :only-child) { grid-template-columns: 1fr; }
